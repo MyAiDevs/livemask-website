@@ -1,3 +1,15 @@
-# LiveMask Website Rules v3.7
+# LiveMask Website - AI Development Rules v3.7
+
+## Always Start Here (Mandatory Pre-check)
 @docs/ai-rules/v3.7/00-Core-Principles.md
 @docs/ai-rules/v3.7/04-Multi-Repo-Linkage.md
+@docs/ai-rules/v3.7/13-Multi-Repo-Development.md
+@docs/docs/LiveMask_开发任务清单与里程碑_v3.6.md
+
+## Website Specific Focus
+Marketing pages, SEO, onboarding landing pages.
+Ensure consistency with App download flow and Backend referral/affiliate logic.
+
+## Multi-Window Development
+This window is for **Website / Marketing**.
+Coordinate landing page changes with App Onboarding and Backend referral systems.
