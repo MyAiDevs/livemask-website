@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Smartphone, Monitor, Loader2, AlertCircle, ArrowLeft,
-  Trash2, Plus, Shield, CheckCircle, XCircle, Clock,
+  Trash2, Plus, Shield, CheckCircle, XCircle,
 } from "lucide-react";
 import { authClient, getErrorMessage } from "@/lib/api";
-import type { DeviceDraft, ApiError } from "@/lib/types";
+import type { DeviceView, ApiError } from "@/lib/types";
 import { PortalLayout } from "@/pages/account/AccountPages";
 
 // ── Auth Guard ──────────────────────────────────────────────────────
@@ -56,48 +56,26 @@ function ErrorBox({ message, onRetry }: { message: string; onRetry?: () => void 
   );
 }
 
-function NotAvailableBox() {
-  return (
-    <Card className="bg-card border-border border-amber-500/20">
-      <CardContent className="p-8 text-center space-y-3">
-        <div className="rounded-full bg-amber-500/10 p-3 inline-flex mx-auto">
-          <Clock className="h-6 w-6 text-amber-500" />
-        </div>
-        <p className="text-sm text-foreground font-medium">Device API is not available yet</p>
-        <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-          This feature is currently under development. Please check back later.
-        </p>
-        <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/20">
-          Coming Soon
-        </Badge>
-      </CardContent>
-    </Card>
-  );
-}
-
 // ── Devices Page (/account/devices) ──────────────────────────────────
 export function DevicesPage() {
   const navigate = useNavigate();
-  const [devices, setDevices] = useState<DeviceDraft[]>([]);
+  const [devices, setDevices] = useState<DeviceView[]>([]);
+  const [deviceLimit, setDeviceLimit] = useState(5);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notAvailable, setNotAvailable] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [processingAction, setProcessingAction] = useState(false);
 
   const fetchDevices = async () => {
     setLoading(true);
     setError(null);
-    setNotAvailable(false);
     try {
       const res = await authClient.getDevices();
-      setDevices(res.devices);
+      setDevices(res.devices ?? []);
+      setDeviceLimit(res.device_limit);
     } catch (err: unknown) {
       const apiErr = err as ApiError;
-      if (apiErr.code === "NOT_IMPLEMENTED") {
-        setNotAvailable(true);
-      } else {
-        setError(getErrorMessage(apiErr));
-      }
+      setError(getErrorMessage(apiErr));
     } finally {
       setLoading(false);
     }
@@ -109,32 +87,30 @@ export function DevicesPage() {
 
   const handleRevoke = async (deviceId: string) => {
     setRevokingId(deviceId);
+    setProcessingAction(true);
     try {
       await authClient.revokeDevice(deviceId);
-      setDevices((prev) => prev.filter((d) => d.id !== deviceId));
+      setDevices((prev) => prev.filter((d) => d.device_id !== deviceId));
     } catch (err: unknown) {
       const apiErr = err as ApiError;
-      if (apiErr.code === "NOT_IMPLEMENTED") {
-        setNotAvailable(true);
-      } else {
-        setError(getErrorMessage(apiErr));
-      }
+      setError(getErrorMessage(apiErr));
     } finally {
       setRevokingId(null);
+      setProcessingAction(false);
     }
   };
 
   const handleAddDevice = async () => {
+    setProcessingAction(true);
+    setError(null);
     try {
-      const newDev = await authClient.addDevice("New Device", "Unknown");
-      setDevices((prev) => [...prev, newDev.device]);
+      const newDev = await authClient.addDevice("New Device", "unknown");
+      setDevices((prev) => [...prev, newDev]);
     } catch (err: unknown) {
       const apiErr = err as ApiError;
-      if (apiErr.code === "NOT_IMPLEMENTED") {
-        setNotAvailable(true);
-      } else {
-        setError(getErrorMessage(apiErr));
-      }
+      setError(getErrorMessage(apiErr));
+    } finally {
+      setProcessingAction(false);
     }
   };
 
@@ -156,15 +132,6 @@ export function DevicesPage() {
     );
   }
 
-  if (notAvailable) {
-    return (
-      <PortalLayout title="Devices">
-        <NotAvailableBox />
-      </PortalLayout>
-    );
-  }
-
-  const deviceLimit = 5;
   const devicesUsed = devices.length;
 
   return (
@@ -208,7 +175,7 @@ export function DevicesPage() {
               size="sm"
               className="bg-teal-600 hover:bg-teal-700 text-white text-xs h-8"
               onClick={handleAddDevice}
-              disabled={devicesUsed >= deviceLimit}
+              disabled={processingAction || devicesUsed >= deviceLimit}
             >
               <Plus className="h-3.5 w-3.5 mr-1" />
               Add Device
@@ -225,6 +192,7 @@ export function DevicesPage() {
                   size="sm"
                   className="mt-4 bg-teal-600 hover:bg-teal-700 text-white text-xs"
                   onClick={handleAddDevice}
+                  disabled={processingAction}
                 >
                   <Plus className="h-3.5 w-3.5 mr-1" />
                   Add Your First Device
@@ -235,12 +203,12 @@ export function DevicesPage() {
             <div className="space-y-2">
               {devices.map((dev) => (
                 <div
-                  key={dev.id}
+                  key={dev.device_id}
                   className="flex items-center justify-between rounded border border-border bg-card px-4 py-3"
                 >
                   <div className="flex items-center gap-3">
                     {dev.platform.toLowerCase().includes("ios") ||
-                    dev.platform.toLowerCase().includes("ipad") ||
+                    dev.platform.toLowerCase().includes("ipados") ||
                     dev.platform.toLowerCase().includes("iphone") ? (
                       <Smartphone className="h-4 w-4 text-muted-foreground shrink-0" />
                     ) : (
@@ -248,7 +216,7 @@ export function DevicesPage() {
                     )}
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="text-sm text-foreground">{dev.name}</p>
+                        <p className="text-sm text-foreground">{dev.device_name}</p>
                         {dev.trusted ? (
                           <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] px-1.5 py-0">
                             <CheckCircle className="h-2.5 w-2.5 mr-0.5" />
@@ -271,10 +239,10 @@ export function DevicesPage() {
                     size="sm"
                     variant="outline"
                     className="text-xs h-7 text-red-400 border-red-500/30 hover:bg-red-500/10"
-                    onClick={() => handleRevoke(dev.id)}
-                    disabled={revokingId === dev.id}
+                    onClick={() => handleRevoke(dev.device_id)}
+                    disabled={revokingId === dev.device_id || processingAction}
                   >
-                    {revokingId === dev.id ? (
+                    {revokingId === dev.device_id ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : (
                       <Trash2 className="h-3 w-3" />

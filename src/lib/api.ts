@@ -11,10 +11,11 @@ import type {
   NodePublic,
   NodeListResponse,
   RecommendedNodeResponse,
-  PlanDraft,
-  SubscriptionDraft,
-  BillingHistoryItemDraft,
-  DeviceDraft,
+  Plan,
+  SubscriptionView,
+  BillingHistoryItem,
+  DeviceView,
+  DevicesResponse,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -30,6 +31,9 @@ const AUTH_ERRORS_MAP: Record<string, string> = {
   AUTH_RATE_LIMITED: "Too many attempts. Please try again later.",
   AUTH_WEAK_PASSWORD: "Password does not meet security requirements.",
   AUTH_DUPLICATE_EMAIL: "An account with this email already exists.",
+  DEVICE_LIMIT_EXCEEDED: "Device limit reached. Please remove a device before adding a new one.",
+  BILLING_PLAN_NOT_FOUND: "Selected plan was not found. Please try again.",
+  BILLING_CHECKOUT_NOT_SUPPORTED: "Checkout is not yet supported. Payment integration coming soon.",
 };
 
 function getErrorMessage(error: ApiError): string {
@@ -40,7 +44,7 @@ class AuthApiClient {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
   private refreshPromise: Promise<boolean> | null = null;
-  private mockMode = MOCK_MODE; // Set VITE_API_MOCK_MODE=false to use real Backend
+  private mockMode = MOCK_MODE;
 
   setTokens(accessToken: string, refreshToken?: string) {
     this.accessToken = accessToken;
@@ -77,7 +81,9 @@ class AuthApiClient {
 
     if (response.status === 401) {
       const errorBody = await response.json().catch(() => ({}));
-      if (errorBody.code === "AUTH_TOKEN_EXPIRED") {
+      // Unwrap nested Backend "error" field (billing endpoints use {error:{code,message}})
+      const flatBody = errorBody.error || errorBody;
+      if (flatBody.code === "AUTH_TOKEN_EXPIRED") {
         const refreshed = await this.tryRefresh();
         if (refreshed) {
           headers["Authorization"] = `Bearer ${this.accessToken}`;
@@ -86,13 +92,14 @@ class AuthApiClient {
             headers,
           });
           if (!retryResponse.ok) {
-            const retryError = await retryResponse.json();
-            throw { status: retryResponse.status, ...retryError } as ApiError;
+            const retryErrorBody = await retryResponse.json().catch(() => ({}));
+            const flatRetry = retryErrorBody.error || retryErrorBody;
+            throw { status: retryResponse.status, ...flatRetry } as ApiError;
           }
           return retryResponse.json();
         }
       }
-      throw { status: response.status, ...errorBody } as ApiError;
+      throw { status: response.status, ...flatBody } as ApiError;
     }
 
     if (!response.ok) {
@@ -100,7 +107,9 @@ class AuthApiClient {
         code: "UNKNOWN",
         message: response.statusText,
       }));
-      throw { status: response.status, ...errorBody } as ApiError;
+      // Unwrap nested Backend "error" field (billing endpoints use {error:{code,message}})
+      const flatBody = errorBody.error || errorBody;
+      throw { status: response.status, ...flatBody } as ApiError;
     }
 
     return response.json();
@@ -133,8 +142,6 @@ class AuthApiClient {
 
   private mockStorage = new Map<string, any>();
 
-  // Backend node.NodePublic uses json:"id", not node_id.
-  // Mock data matches that shape so the same code works in real and mock mode.
   private mockNodes: NodePublic[] = [
     {
       id: "node_us_nyc_01",
@@ -272,34 +279,33 @@ class AuthApiClient {
     },
   ];
 
-  // Mock billing/devices data
-  private mockSubscription: SubscriptionDraft = {
+  // Mock billing/devices data — aligned with Backend types
+  private mockSubscription: SubscriptionView = {
     plan_id: "premium_monthly",
     status: "active",
     current_period_start: "2026-04-17T00:00:00Z",
     current_period_end: "2026-05-17T23:59:59Z",
     cancel_at_period_end: false,
     device_limit: 5,
-    devices_used: 3,
+    device_used: 3,
   };
 
-  private mockPlans: PlanDraft[] = [
-    { plan_id: "free", name: "Free", price_monthly: 0, device_limit: 1, node_access: "3 locations", features: ["1 device", "3 server locations", "Basic speed", "Community support"] },
-    { plan_id: "premium_monthly", name: "Premium Monthly", price_monthly: 9.99, device_limit: 5, node_access: "All 50+ servers", features: ["5 devices", "All 50+ servers", "Max speed", "WireGuard protocol", "24/7 support"] },
-    { plan_id: "premium_annual", name: "Premium Annual", price_monthly: 5.83, price_annual: 69.99, device_limit: 5, node_access: "All 50+ servers", features: ["5 devices", "All 50+ servers", "Max speed", "WireGuard protocol", "24/7 support", "2 months free"] },
-    { plan_id: "enterprise", name: "Enterprise", price_monthly: 49.99, device_limit: 999, node_access: "Dedicated", features: ["Unlimited devices", "Dedicated servers", "SLA guarantee", "Admin console", "Priority support"] },
+  private mockPlans: Plan[] = [
+    { plan_id: "free", name: "Free", price_cents: 0, currency: "USD", billing_period: "monthly", device_limit: 1, node_access: "basic", features: ["1 device", "Basic nodes"] },
+    { plan_id: "premium_monthly", name: "Premium", price_cents: 999, currency: "USD", billing_period: "monthly", device_limit: 5, node_access: "all", features: ["5 devices", "All nodes", "Priority speed"] },
+    { plan_id: "enterprise_monthly", name: "Enterprise", price_cents: 2999, currency: "USD", billing_period: "monthly", device_limit: 20, node_access: "all", features: ["20 devices", "All nodes", "Priority speed", "Dedicated support"] },
   ];
 
-  private mockBillingHistory: BillingHistoryItemDraft[] = [
-    { invoice_id: "INV-2026-001", plan_name: "Premium Monthly", amount: 9.99, currency: "USD", status: "paid", paid_at: "2026-04-17T10:00:00Z", description: "Premium Monthly — May 2026" },
-    { invoice_id: "INV-2026-002", plan_name: "Premium Monthly", amount: 9.99, currency: "USD", status: "paid", paid_at: "2026-03-17T10:00:00Z", description: "Premium Monthly — Apr 2026" },
-    { invoice_id: "INV-2026-003", plan_name: "Premium Monthly", amount: 9.99, currency: "USD", status: "paid", paid_at: "2026-02-17T10:00:00Z", description: "Premium Monthly — Mar 2026" },
+  private mockBillingHistory: BillingHistoryItem[] = [
+    { invoice_id: "inv_mock_001", plan_id: "premium_monthly", amount_cents: 999, currency: "USD", status: "paid", paid_at: "2026-04-17T10:00:00Z", created_at: "2026-03-18T10:00:00Z" },
+    { invoice_id: "inv_mock_002", plan_id: "premium_monthly", amount_cents: 999, currency: "USD", status: "paid", paid_at: "2026-03-17T10:00:00Z", created_at: "2026-02-18T10:00:00Z" },
+    { invoice_id: "inv_mock_003", plan_id: "premium_monthly", amount_cents: 999, currency: "USD", status: "paid", paid_at: "2026-02-17T10:00:00Z", created_at: "2026-01-18T10:00:00Z" },
   ];
 
-  private mockDevices: DeviceDraft[] = [
-    { id: "dev_001", name: "iPhone 15 Pro", platform: "iOS 18.4", app_version: "2.4.1", last_active_at: new Date().toISOString(), trusted: true },
-    { id: "dev_002", name: "MacBook Pro", platform: "macOS 14.3", app_version: "2.4.1", last_active_at: new Date(Date.now() - 3600000).toISOString(), trusted: true },
-    { id: "dev_003", name: "iPad Air", platform: "iPadOS 17.4", app_version: "2.4.0", last_active_at: new Date(Date.now() - 86400000 * 2).toISOString(), trusted: false },
+  private mockDevices: DeviceView[] = [
+    { device_id: "dev_mock_001", device_name: "iPhone 15 Pro", platform: "ios", app_version: "2.4.1", trusted: true, last_active_at: new Date().toISOString(), created_at: "2026-01-15T08:30:00Z" },
+    { device_id: "dev_mock_002", device_name: "MacBook Pro", platform: "macos", app_version: "2.4.1", trusted: true, last_active_at: new Date(Date.now() - 3600000).toISOString(), created_at: "2026-02-10T12:00:00Z" },
+    { device_id: "dev_mock_003", device_name: "iPad Air", platform: "ipados", app_version: "2.4.0", trusted: false, last_active_at: new Date(Date.now() - 86400000 * 2).toISOString(), created_at: "2026-03-01T09:00:00Z" },
   ];
 
   private async mockRequest<T>(path: string, options: RequestInit): Promise<T> {
@@ -353,7 +359,6 @@ class AuthApiClient {
           } as ApiError;
         }
 
-        // Seed super_admin for admin login
         const isAdminLogin = req.client_type === "admin" && req.email === "admin@livemask.io";
         const roles = isAdminLogin
           ? ["super_admin", "admin"]
@@ -421,47 +426,50 @@ class AuthApiClient {
         return { nodes: this.mockNodes, total: this.mockNodes.length } as T;
       }
 
-      // ── Billing / Device mock endpoints (TASK-WEBSITE-BILLING-001) ──────
+      // ── Billing / Device mock endpoints ────────────────────────────
       case "/api/v1/billing/subscription": {
-        return { ...this.mockSubscription } as T;
+        return { subscription: { ...this.mockSubscription } } as T;
       }
       case "/api/v1/billing/plans": {
         return { plans: this.mockPlans } as T;
       }
       case "/api/v1/billing/history": {
-        return { items: this.mockBillingHistory, total: this.mockBillingHistory.length } as T;
+        return { items: this.mockBillingHistory } as T;
       }
       case "/api/v1/billing/checkout": {
-        // Checkout mock — returns session url placeholder
-        // In mock mode, simulate a successful session creation
         return {
-          session_id: "cs_mock_" + crypto.randomUUID().slice(0, 8),
-          url: "/billing/success",
-          expires_in: 1800,
+          checkout_id: "cs_mock_" + crypto.randomUUID().slice(0, 8),
+          status: "mock_created",
+          redirect_url: null,
         } as T;
       }
       case "/api/v1/devices": {
-        if (options.method === "DELETE" || options.method === "POST") {
-          if (options.method === "DELETE") {
-            const deviceId = (body as { device_id: string }).device_id;
-            this.mockDevices = this.mockDevices.filter((d) => d.id !== deviceId);
-            return { ok: true } as T;
-          }
-          // POST — add device skeleton
-          const newDevice: DeviceDraft = {
-            id: "dev_mock_" + crypto.randomUUID().slice(0, 6),
-            name: (body as { name: string }).name || "New Device",
-            platform: (body as { platform: string }).platform || "Unknown",
+        if (options.method === "POST") {
+          const newDevice: DeviceView = {
+            device_id: "dev_mock_" + crypto.randomUUID().slice(0, 6),
+            device_name: (body as { device_name: string }).device_name || "New Device",
+            platform: (body as { platform: string }).platform || "unknown",
             trusted: false,
+            created_at: new Date().toISOString(),
           };
           this.mockDevices.push(newDevice);
-          return { device: newDevice } as T;
+          return { ...newDevice } as T;
         }
-        return { devices: this.mockDevices } as T;
+        return {
+          devices: this.mockDevices,
+          device_limit: 5,
+          device_used: this.mockDevices.length,
+        } as T;
       }
-
-      default:
+      default: {
+        // DELETE /api/v1/devices/{id}
+        if (path.startsWith("/api/v1/devices/")) {
+          const deviceId = path.replace("/api/v1/devices/", "");
+          this.mockDevices = this.mockDevices.filter((d) => d.device_id !== deviceId);
+          return { ok: true } as T;
+        }
         throw { status: 404, code: "NOT_FOUND", message: "Endpoint not found in mock" } as ApiError;
+      }
     }
   }
 
@@ -515,61 +523,50 @@ class AuthApiClient {
     return !!this.accessToken;
   }
 
-  // ── Billing / Device API (skeleton — TASK-WEBSITE-BILLING-001) ──────────
+  // ── Billing / Device API ───────────────────────────────────────────
+  // Real mode calls Backend; mock mode uses mockRequest.
 
-  // ── Billing / Device API (skeleton — TASK-WEBSITE-BILLING-001) ──────────
-  // Real-mode guard: until Backend endpoints exist, throw a friendly message.
-  // Mock mode delegates to mockRequest for local preview.
-
-  async getSubscription(): Promise<SubscriptionDraft> {
-    if (!this.mockMode) throw this.notImplementedError("Billing");
-    return this.request<SubscriptionDraft>("/api/v1/billing/subscription", {}, true);
+  async getSubscription(): Promise<SubscriptionView> {
+    const res = await this.request<{ subscription: SubscriptionView }>("/api/v1/billing/subscription", {}, true);
+    return res.subscription ?? { plan_id: "free", status: "active", cancel_at_period_end: false, device_limit: 1, device_used: 0 };
   }
 
-  async getPlans(): Promise<{ plans: PlanDraft[] }> {
-    if (!this.mockMode) throw this.notImplementedError("Billing");
-    return this.request<{ plans: PlanDraft[] }>("/api/v1/billing/plans", {}, true);
+  async getPlans(): Promise<{ plans: Plan[] }> {
+    return this.request<{ plans: Plan[] }>("/api/v1/billing/plans", {}, true);
   }
 
-  async getBillingHistory(): Promise<{ items: BillingHistoryItemDraft[]; total: number }> {
-    if (!this.mockMode) throw this.notImplementedError("Billing");
-    return this.request<{ items: BillingHistoryItemDraft[]; total: number }>("/api/v1/billing/history", {}, true);
+  async getBillingHistory(): Promise<{ items: BillingHistoryItem[] }> {
+    return this.request<{ items: BillingHistoryItem[] }>("/api/v1/billing/history", {}, true);
   }
 
-  async createCheckoutSession(planId: string): Promise<{ session_id: string; url: string; expires_in: number }> {
-    if (!this.mockMode) throw this.notImplementedError("Billing");
-    return this.request<{ session_id: string; url: string; expires_in: number }>(
+  async createCheckoutSession(planId: string): Promise<{ checkout_id: string; status: string; redirect_url: string | null }> {
+    return this.request<{ checkout_id: string; status: string; redirect_url: string | null }>(
       "/api/v1/billing/checkout",
-      { method: "POST", body: JSON.stringify({ plan_id: planId }) },
+      { method: "POST", body: JSON.stringify({ plan_id: planId, payment_method: "mock" }) },
       true
     );
   }
 
-  async getDevices(): Promise<{ devices: DeviceDraft[] }> {
-    if (!this.mockMode) throw this.notImplementedError("Device");
-    return this.request<{ devices: DeviceDraft[] }>("/api/v1/devices", {}, true);
+  async getDevices(): Promise<DevicesResponse> {
+    return this.request<DevicesResponse>("/api/v1/devices", {}, true);
   }
 
   async revokeDevice(deviceId: string): Promise<{ ok: boolean }> {
-    if (!this.mockMode) throw this.notImplementedError("Device");
+    // Backend: DELETE /api/v1/devices/{device_id}
     return this.request<{ ok: boolean }>(
-      "/api/v1/devices",
-      { method: "DELETE", body: JSON.stringify({ device_id: deviceId }) },
+      `/api/v1/devices/${deviceId}`,
+      { method: "DELETE" },
       true
     );
   }
 
-  async addDevice(name: string, platform: string): Promise<{ device: DeviceDraft }> {
-    if (!this.mockMode) throw this.notImplementedError("Device");
-    return this.request<{ device: DeviceDraft }>(
+  async addDevice(deviceName: string, platform: string): Promise<DeviceView> {
+    // Backend returns HTTP 201 with DeviceView body (not wrapped in {device: ...})
+    return this.request<DeviceView>(
       "/api/v1/devices",
-      { method: "POST", body: JSON.stringify({ name, platform }) },
+      { method: "POST", body: JSON.stringify({ device_name: deviceName, platform }) },
       true
     );
-  }
-
-  private notImplementedError(domain: string): ApiError {
-    return { status: 501, code: "NOT_IMPLEMENTED", message: `${domain} API is not available yet. Please check back later.` };
   }
 }
 

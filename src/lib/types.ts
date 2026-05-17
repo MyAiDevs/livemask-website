@@ -99,19 +99,18 @@ export const PERMISSIONS = {
 } as const;
 
 // --- Node Types (public-facing only, per TASK-WEBSITE-NODE-001) ---
-// Matches Backend node.NodePublic JSON shape exactly.
 
 export interface NodePublic {
-  id: string;               // Backend json:"id"
-  node_name: string;        // Backend json:"node_name,omitempty"
-  status: string;           // "active" | "pending_review" | "approved" | "disabled" | "suspended" | "rejected"
-  load_score: number;       // Backend json:"load_score" (int → number in JS)
-  cpu_usage?: number;       // Backend json:"cpu_usage,omitempty"
-  memory_usage?: number;    // Backend json:"memory_usage,omitempty"
-  active_connections?: number; // Backend json:"active_connections,omitempty"
-  degraded: boolean;        // Backend json:"degraded"
-  degraded_reason?: string; // Present on full Node but not NodePublic — safe to read if present
-  last_heartbeat_at?: string; // Backend json:"last_heartbeat_at,omitempty" (*time.Time → ISO string)
+  id: string;
+  node_name: string;
+  status: string;
+  load_score: number;
+  cpu_usage?: number;
+  memory_usage?: number;
+  active_connections?: number;
+  degraded: boolean;
+  degraded_reason?: string;
+  last_heartbeat_at?: string;
 }
 
 export interface NodeListResponse {
@@ -122,51 +121,56 @@ export interface RecommendedNodeResponse {
   nodes: NodePublic[];
 }
 
-// --- Billing / Device Skeleton Types (TASK-WEBSITE-BILLING-001) ---
-// Draft types — final shape will be defined by Backend contract.
-// Named with "Draft" suffix to avoid conflict with future contract types.
+// --- Billing / Device Types (TASK-WEBSITE-BILLING-001/002) ---
+// Aligned with livemask-backend internal/billing/types.go JSON tags.
 
-export type BillingPlanId = "free" | "premium_monthly" | "premium_annual" | "enterprise";
-
-export interface PlanDraft {
-  plan_id: BillingPlanId;
+export interface Plan {
+  plan_id: string;
   name: string;
-  price_monthly?: number;
-  price_annual?: number;
+  price_cents: number;        // int64 from Backend, number in JS
+  currency: string;            // "USD"
+  billing_period: string;      // "monthly" | "yearly"
   device_limit: number;
-  node_access: string;
+  node_access: string;          // "basic" | "all"
   features: string[];
 }
 
-export interface SubscriptionDraft {
-  plan_id: BillingPlanId;
-  status: "active" | "expired" | "paused" | "canceled" | "none";
-  current_period_start?: string;
-  current_period_end?: string;
+export interface SubscriptionView {
+  subscription_id?: string;    // omitted for free-plan fallback
+  plan_id: string;
+  status: string;              // "active" | "canceled" | "expired" | "trialing" | "paused"
+  current_period_start?: string; // RFC3339; omitted for free fallback
+  current_period_end?: string;   // RFC3339; omitted for free fallback
+  renew_at?: string;             // RFC3339; only on DefaultSubscription
   cancel_at_period_end: boolean;
   device_limit: number;
-  devices_used: number;
+  device_used: number;
 }
 
-export type BillingHistoryStatus = "paid" | "pending" | "failed" | "refunded";
-
-export interface BillingHistoryItemDraft {
+export interface BillingHistoryItem {
   invoice_id: string;
-  plan_name: string;
-  amount: number;
+  plan_id: string;
+  amount_cents: number;
   currency: string;
-  status: BillingHistoryStatus;
-  paid_at?: string;
-  description: string;
+  status: string;              // "paid" | "pending" | "failed" | "refunded"
+  paid_at?: string;            // RFC3339; omitted if nil
+  created_at: string;          // always present
 }
 
-export interface DeviceDraft {
-  id: string;
-  name: string;
+export interface DeviceView {
+  device_id: string;
+  device_name: string;
   platform: string;
-  app_version?: string;
-  last_active_at?: string;
+  app_version?: string;        // omitted when empty
   trusted: boolean;
+  last_active_at?: string;     // RFC3339; omitted if nil
+  created_at: string;
+}
+
+export interface DevicesResponse {
+  devices: DeviceView[];
+  device_limit: number;
+  device_used: number;
 }
 
 // Roles from contract

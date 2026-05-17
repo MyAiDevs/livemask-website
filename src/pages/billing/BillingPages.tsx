@@ -8,7 +8,7 @@ import {
   Clock, XCircle, FileText, ExternalLink,
 } from "lucide-react";
 import { authClient, getErrorMessage } from "@/lib/api";
-import type { SubscriptionDraft, PlanDraft, BillingHistoryItemDraft, ApiError } from "@/lib/types";
+import type { SubscriptionView, Plan, BillingHistoryItem, DeviceView, ApiError } from "@/lib/types";
 import { PortalLayout } from "@/pages/account/AccountPages";
 
 // ── Shared Auth Guard ────────────────────────────────────────────────
@@ -17,7 +17,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    // Small delay to let auth state initialize from storage/token check
     const timer = setTimeout(() => {
       if (!authClient.isAuthenticated()) {
         navigate("/login", { replace: true });
@@ -41,25 +40,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function NotAvailableBox({ domain }: { domain: string }) {
-  return (
-    <Card className="bg-card border-border border-amber-500/20">
-      <CardContent className="p-8 text-center space-y-3">
-        <div className="rounded-full bg-amber-500/10 p-3 inline-flex mx-auto">
-          <Clock className="h-6 w-6 text-amber-500" />
-        </div>
-        <p className="text-sm text-foreground font-medium">{domain} API is not available yet</p>
-        <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-          This feature is currently under development. Please check back later.
-        </p>
-        <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/20">
-          Coming Soon
-        </Badge>
-      </CardContent>
-    </Card>
-  );
-}
-
 function ErrorBox({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <Card className="bg-card border-border border-red-500/20">
@@ -79,25 +59,19 @@ function ErrorBox({ message, onRetry }: { message: string; onRetry?: () => void 
 // ── Billing Overview (/billing) ────────────────────────────────────────
 export function BillingOverviewPage() {
   const navigate = useNavigate();
-  const [subscription, setSubscription] = useState<SubscriptionDraft | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notAvailable, setNotAvailable] = useState(false);
 
   const fetchSubscription = async () => {
     setLoading(true);
     setError(null);
-    setNotAvailable(false);
     try {
       const sub = await authClient.getSubscription();
       setSubscription(sub);
     } catch (err: unknown) {
       const apiErr = err as ApiError;
-      if (apiErr.code === "NOT_IMPLEMENTED") {
-        setNotAvailable(true);
-      } else {
-        setError(getErrorMessage(apiErr));
-      }
+      setError(getErrorMessage(apiErr));
     } finally {
       setLoading(false);
     }
@@ -127,20 +101,13 @@ export function BillingOverviewPage() {
     );
   }
 
-  if (notAvailable) {
-    return (
-      <PortalLayout title="Billing">
-        <NotAvailableBox domain="Billing" />
-      </PortalLayout>
-    );
-  }
-
   const statusColor = (status: string) => {
     switch (status) {
       case "active": return "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
+      case "trialing": return "text-blue-400 bg-blue-500/10 border-blue-500/20";
       case "paused": return "text-amber-400 bg-amber-500/10 border-amber-500/20";
-      case "expired":
-      case "canceled": return "text-red-400 bg-red-500/10 border-red-500/20";
+      case "canceled":
+      case "expired": return "text-red-400 bg-red-500/10 border-red-500/20";
       default: return "text-muted-foreground bg-muted/50 border-border";
     }
   };
@@ -148,9 +115,10 @@ export function BillingOverviewPage() {
   const statusLabel = (status: string) => {
     switch (status) {
       case "active": return "Active";
+      case "trialing": return "Trialing";
       case "paused": return "Paused";
-      case "expired": return "Expired";
       case "canceled": return "Canceled";
+      case "expired": return "Expired";
       default: return "No Plan";
     }
   };
@@ -158,9 +126,8 @@ export function BillingOverviewPage() {
   const planLabel = (planId: string) => {
     switch (planId) {
       case "free": return "Free";
-      case "premium_monthly": return "Premium Monthly";
-      case "premium_annual": return "Premium Annual";
-      case "enterprise": return "Enterprise";
+      case "premium_monthly": return "Premium";
+      case "enterprise_monthly": return "Enterprise";
       default: return planId;
     }
   };
@@ -198,7 +165,7 @@ export function BillingOverviewPage() {
                   )}
                   <div className="flex items-center gap-2 mt-2">
                     <span className="text-xs text-muted-foreground">
-                      {subscription?.devices_used ?? 0} of {subscription?.device_limit ?? 0} devices used
+                      {subscription?.device_used ?? 0} of {subscription?.device_limit ?? 0} devices used
                     </span>
                   </div>
                 </div>
@@ -288,13 +255,13 @@ export function BillingOverviewPage() {
                   className="bg-teal-500 h-2 rounded-full transition-all"
                   style={{
                     width: subscription
-                      ? `${Math.min(100, (subscription.devices_used / subscription.device_limit) * 100)}%`
+                      ? `${Math.min(100, (subscription.device_used / subscription.device_limit) * 100)}%`
                       : "0%",
                   }}
                 />
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                {subscription?.devices_used ?? 0} of {subscription?.device_limit ?? 0} devices used
+                {subscription?.device_used ?? 0} of {subscription?.device_limit ?? 0} devices used
               </p>
             </CardContent>
           </Card>
@@ -307,30 +274,24 @@ export function BillingOverviewPage() {
 // ── Plans Page (/billing/plans) ───────────────────────────────────────
 export function PlansPage() {
   const navigate = useNavigate();
-  const [plans, setPlans] = useState<PlanDraft[]>([]);
-  const [currentPlanId, setCurrentPlanId] = useState<string>("premium_monthly");
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [currentPlanId, setCurrentPlanId] = useState<string>("free");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notAvailable, setNotAvailable] = useState(false);
 
   const fetchPlans = async () => {
     setLoading(true);
     setError(null);
-    setNotAvailable(false);
     try {
       const [plansRes, subRes] = await Promise.all([
         authClient.getPlans(),
         authClient.getSubscription(),
       ]);
-      setPlans(plansRes.plans);
+      setPlans(plansRes.plans ?? []);
       setCurrentPlanId(subRes.plan_id);
     } catch (err: unknown) {
       const apiErr = err as ApiError;
-      if (apiErr.code === "NOT_IMPLEMENTED") {
-        setNotAvailable(true);
-      } else {
-        setError(getErrorMessage(apiErr));
-      }
+      setError(getErrorMessage(apiErr));
     } finally {
       setLoading(false);
     }
@@ -358,13 +319,11 @@ export function PlansPage() {
     );
   }
 
-  if (notAvailable) {
-    return (
-      <PortalLayout title="Plans">
-        <NotAvailableBox domain="Billing" />
-      </PortalLayout>
-    );
-  }
+  const formatPrice = (cents: number, currency: string) => {
+    // price_cents is int64 from Backend, e.g. 999 → $9.99
+    const dollars = (cents / 100).toFixed(2);
+    return `${currency === "USD" ? "$" : ""}${dollars}`;
+  };
 
   return (
     <AuthGuard>
@@ -380,63 +339,67 @@ export function PlansPage() {
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {plans.map((plan) => {
-              const isCurrent = plan.plan_id === currentPlanId;
-              const price = plan.price_annual ?? plan.price_monthly ?? 0;
-              const priceLabel = plan.price_annual !== undefined ? `$${plan.price_annual}/yr` : `$${plan.price_monthly}/mo`;
+          {plans.length === 0 ? (
+            <Card className="bg-card border-border">
+              <CardContent className="p-8 text-center">
+                <p className="text-sm text-muted-foreground">No plans available at this time.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {plans.map((plan) => {
+                const isCurrent = plan.plan_id === currentPlanId;
+                const price = formatPrice(plan.price_cents, plan.currency);
 
-              return (
-                <Card
-                  key={plan.plan_id}
-                  className={`bg-card border-border relative ${
-                    isCurrent ? "ring-1 ring-teal-500/30" : ""
-                  }`}
-                >
-                  <CardContent className="p-5">
-                    {isCurrent && (
-                      <Badge
-                        variant="outline"
-                        className="absolute top-3 right-3 bg-teal-500/10 text-teal-400 border-teal-500/20 text-xs"
-                      >
-                        Current
-                      </Badge>
-                    )}
-                    <h3 className="font-medium text-foreground mb-1">{plan.name}</h3>
-                    <p className="text-2xl font-bold text-foreground">
-                      {price === 0 ? "Free" : `$${price}`}
-                      <span className="text-sm text-muted-foreground font-normal">
-                        {plan.price_annual ? "/year" : plan.price_monthly ? "/mo" : ""}
-                      </span>
-                    </p>
-                    {plan.price_annual && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        ${plan.price_monthly}/mo billed annually
+                return (
+                  <Card
+                    key={plan.plan_id}
+                    className={`bg-card border-border relative ${
+                      isCurrent ? "ring-1 ring-teal-500/30" : ""
+                    }`}
+                  >
+                    <CardContent className="p-5">
+                      {isCurrent && (
+                        <Badge
+                          variant="outline"
+                          className="absolute top-3 right-3 bg-teal-500/10 text-teal-400 border-teal-500/20 text-xs"
+                        >
+                          Current
+                        </Badge>
+                      )}
+                      <h3 className="font-medium text-foreground mb-1">{plan.name}</h3>
+                      <p className="text-2xl font-bold text-foreground">
+                        {plan.price_cents === 0 ? "Free" : price}
+                        <span className="text-sm text-muted-foreground font-normal">
+                          /{plan.billing_period === "yearly" ? "yr" : "mo"}
+                        </span>
                       </p>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-2">{plan.node_access}</p>
-                    <div className="mt-4 space-y-1.5">
-                      {plan.features.map((feat, i) => (
-                        <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                          <CheckCircle className="h-3 w-3 text-teal-500 mt-0.5 shrink-0" />
-                          <span>{feat}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {!isCurrent && (
-                      <Button
-                        size="sm"
-                        className="w-full mt-4 text-xs h-8 bg-teal-600 hover:bg-teal-700 text-white"
-                        onClick={() => navigate(`/billing/checkout?plan=${plan.plan_id}`)}
-                      >
-                        {price === 0 ? "Downgrade" : plan.price_monthly === 0 ? "Select" : "Upgrade"}
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {plan.node_access === "all" ? "All nodes" : plan.node_access}
+                      </p>
+                      <div className="mt-4 space-y-1.5">
+                        {plan.features.map((feat, i) => (
+                          <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                            <CheckCircle className="h-3 w-3 text-teal-500 mt-0.5 shrink-0" />
+                            <span>{feat}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {!isCurrent && (
+                        <Button
+                          size="sm"
+                          className="w-full mt-4 text-xs h-8 bg-teal-600 hover:bg-teal-700 text-white"
+                          onClick={() => navigate(`/billing/checkout?plan=${plan.plan_id}`)}
+                        >
+                          {plan.price_cents === 0 ? "Downgrade" : "Upgrade"}
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
       </PortalLayout>
     </AuthGuard>
@@ -446,25 +409,19 @@ export function PlansPage() {
 // ── Billing History (/billing/history) ────────────────────────────────
 export function BillingHistoryPage() {
   const navigate = useNavigate();
-  const [items, setItems] = useState<BillingHistoryItemDraft[]>([]);
+  const [items, setItems] = useState<BillingHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notAvailable, setNotAvailable] = useState(false);
 
   const fetchHistory = async () => {
     setLoading(true);
     setError(null);
-    setNotAvailable(false);
     try {
       const res = await authClient.getBillingHistory();
-      setItems(res.items);
+      setItems(res.items ?? []);
     } catch (err: unknown) {
       const apiErr = err as ApiError;
-      if (apiErr.code === "NOT_IMPLEMENTED") {
-        setNotAvailable(true);
-      } else {
-        setError(getErrorMessage(apiErr));
-      }
+      setError(getErrorMessage(apiErr));
     } finally {
       setLoading(false);
     }
@@ -512,14 +469,6 @@ export function BillingHistoryPage() {
     );
   }
 
-  if (notAvailable) {
-    return (
-      <PortalLayout title="Billing History">
-        <NotAvailableBox domain="Billing" />
-      </PortalLayout>
-    );
-  }
-
   return (
     <AuthGuard>
       <PortalLayout title="Billing History">
@@ -543,31 +492,34 @@ export function BillingHistoryPage() {
             </Card>
           ) : (
             <div className="space-y-2">
-              {items.map((item) => (
-                <div
-                  key={item.invoice_id}
-                  className="flex items-center justify-between rounded border border-border bg-card px-4 py-3"
-                >
-                  <div className="flex items-center gap-3">
-                    {statusIcon(item.status)}
-                    <div>
-                      <p className="text-sm text-foreground">{item.description}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.invoice_id}
-                        {item.paid_at && ` • ${new Date(item.paid_at).toLocaleDateString("en-US", {
-                          month: "short", day: "numeric", year: "numeric",
-                        })}`}
-                      </p>
+              {items.map((item) => {
+                const amount = (item.amount_cents / 100).toFixed(2);
+                return (
+                  <div
+                    key={item.invoice_id}
+                    className="flex items-center justify-between rounded border border-border bg-card px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      {statusIcon(item.status)}
+                      <div>
+                        <p className="text-sm text-foreground">{item.plan_id}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.invoice_id}
+                          {item.paid_at && ` • ${new Date(item.paid_at).toLocaleDateString("en-US", {
+                            month: "short", day: "numeric", year: "numeric",
+                          })}`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-foreground font-mono">
+                        ${amount} {item.currency}
+                      </span>
+                      {statusBadge(item.status)}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-foreground font-mono">
-                      ${item.amount.toFixed(2)} {item.currency}
-                    </span>
-                    {statusBadge(item.status)}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -583,36 +535,38 @@ export function CheckoutPage() {
   const params = new URLSearchParams(location.search);
   const planId = params.get("plan") || "premium_monthly";
 
-  const planPrice = planId === "enterprise"
-    ? "$49.99/mo"
-    : planId === "premium_annual"
-    ? "$69.99/yr"
-    : planId === "free"
-    ? "Free"
-    : "$9.99/mo";
+  const planPrice = (() => {
+    switch (planId) {
+      case "enterprise_monthly": return "$29.99/mo";
+      case "free": return "Free";
+      default: return "$9.99/mo";
+    }
+  })();
 
-  const planName = planId === "enterprise"
-    ? "Enterprise"
-    : planId === "premium_annual"
-    ? "Premium Annual"
-    : planId === "free"
-    ? "Free"
-    : "Premium Monthly";
+  const planName = (() => {
+    switch (planId) {
+      case "enterprise_monthly": return "Enterprise";
+      case "free": return "Free";
+      default: return "Premium";
+    }
+  })();
 
-  const [notAvailable, setNotAvailable] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [checkoutStatus, setCheckoutStatus] = useState<string | null>(null);
 
   const handleProceed = async () => {
-    setNotAvailable(false);
+    setProcessing(true);
+    setCheckoutError(null);
+    setCheckoutStatus(null);
     try {
       const session = await authClient.createCheckoutSession(planId);
-      if (session.url) {
-        navigate(session.url);
-      }
+      setCheckoutStatus(session.status);
     } catch (err: unknown) {
       const apiErr = err as ApiError;
-      if (apiErr.code === "NOT_IMPLEMENTED") {
-        setNotAvailable(true);
-      }
+      setCheckoutError(getErrorMessage(apiErr));
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -630,13 +584,6 @@ export function CheckoutPage() {
             </div>
           </div>
 
-          {notAvailable ? (
-            <NotAvailableBox domain="Billing" />
-          ) : (
-            <></>
-          )}
-
-          {!notAvailable && (<>
           {/* Order Summary */}
           <Card className="bg-card border-border">
             <CardContent className="p-6 space-y-4">
@@ -656,16 +603,38 @@ export function CheckoutPage() {
             </CardContent>
           </Card>
 
+          {/* Status messages */}
+          {checkoutStatus && (
+            <Card className="bg-card border-border border-emerald-500/20">
+              <CardContent className="p-4 text-center">
+                <CheckCircle className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
+                <p className="text-sm text-foreground font-medium">Checkout initiated</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Status: {checkoutStatus}. Payment integration coming in a future TASK.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {checkoutError && (
+            <Card className="bg-card border-border border-red-500/20">
+              <CardContent className="p-4 text-center">
+                <AlertCircle className="h-6 w-6 text-red-400 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">{checkoutError}</p>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Payment gateway placeholder */}
           <Card className="bg-card border-border border-amber-500/20">
             <CardContent className="p-6 text-center space-y-3">
               <div className="rounded-full bg-amber-500/10 p-3 inline-flex mx-auto">
                 <Clock className="h-6 w-6 text-amber-500" />
               </div>
-              <p className="text-sm text-foreground font-medium">Payment Gateway — Coming Soon</p>
+              <p className="text-sm text-foreground font-medium">Payment Gateway — Mock Mode</p>
               <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                 Real payment processing will be implemented in a future Payment TASK.
-                This is a UI skeleton for demonstration purposes only.
+                This page uses the Backend mock checkout endpoint.
               </p>
               <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/20">
                 Awaiting Payment TASK
@@ -685,15 +654,15 @@ export function CheckoutPage() {
             <Button
               className="flex-1 text-xs bg-teal-600 hover:bg-teal-700 text-white"
               onClick={handleProceed}
+              disabled={processing}
             >
-              Proceed to Payment
+              {processing ? "Processing..." : "Proceed to Payment"}
             </Button>
           </div>
 
           <p className="text-xs text-muted-foreground text-center">
             Your payment information is secure. No real payment is processed on this page.
           </p>
-          </>)}
         </div>
       </PortalLayout>
     </AuthGuard>
