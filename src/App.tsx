@@ -5,6 +5,7 @@ import { AuthProvider } from "@/lib/auth";
 import { HomePage, PricingPage, DownloadPage, SecurityPage, FAQPage } from "@/pages/WebsitePage";
 import { LoginPage, RegisterPage, ForgotPasswordPage, VerifyEmailPage, AuthCallbackPage } from "@/pages/auth/AuthPages";
 import { AccountPage, BillingPage, MarketplacePage, PointsPage, SupportPage } from "@/pages/account/AccountPages";
+import { NodesPage } from "@/pages/nodes/NodesPage";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,8 @@ const AppRoutes = () => (
     {/* User Portals */}
     <Route path="/account" element={<AccountPage />} />
     <Route path="/account/*" element={<AccountPage />} />
+    <Route path="/nodes" element={<NodesPage />} />
+    <Route path="/nodes/*" element={<NodesPage />} />
     <Route path="/billing" element={<BillingPage />} />
     <Route path="/billing/*" element={<BillingPage />} />
     <Route path="/market" element={<MarketplacePage />} />

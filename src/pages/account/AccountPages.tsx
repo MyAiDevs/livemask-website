@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Shield, User, Smartphone, Monitor, Lock, CreditCard,
   CheckCircle, AlertCircle, ShoppingCart, Trophy, HeadphonesIcon,
-  LogOut,
+  Server, LogOut,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
@@ -33,6 +33,7 @@ function PortalLayout({ children, title }: { children: React.ReactNode; title: s
           </div>
           <div className="flex items-center gap-4 text-sm">
             <Link to="/account" className="text-muted-foreground hover:text-foreground">Account</Link>
+            <Link to="/nodes" className="text-muted-foreground hover:text-foreground">Nodes</Link>
             <Link to="/billing" className="text-muted-foreground hover:text-foreground">Billing</Link>
             <Link to="/support" className="text-muted-foreground hover:text-foreground">Support</Link>
             <button
@@ -51,6 +52,14 @@ function PortalLayout({ children, title }: { children: React.ReactNode; title: s
 
 // Placeholder cards for future features
 const placeholderEntries = [
+  {
+    title: "Server Nodes",
+    description: "View available nodes and their status",
+    icon: Server,
+    route: "/nodes",
+    color: "text-teal-500",
+    bgColor: "bg-teal-500/10",
+  },
   {
     title: "Subscription",
     description: "Manage your plan, billing, and payment methods",

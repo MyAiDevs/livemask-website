@@ -98,6 +98,30 @@ export const PERMISSIONS = {
   AMBASSADOR_SELF_WRITE: "ambassador:self_write",
 } as const;
 
+// --- Node Types (public-facing only, per TASK-WEBSITE-NODE-001) ---
+
+export interface NodePublic {
+  node_id: string;
+  node_name: string;
+  status: string;           // "active" | "degraded" | "offline" | "maintenance"
+  load_score: number;       // 0.0 – 1.0, lower = less loaded
+  cpu_usage: number;        // percentage 0–100
+  memory_usage: number;     // percentage 0–100
+  active_connections: number;
+  degraded: boolean;
+  degraded_reason?: string;
+  last_heartbeat_at: string; // ISO 8601
+}
+
+export interface NodeListResponse {
+  nodes: NodePublic[];
+  total: number;
+}
+
+export interface RecommendedNodeResponse {
+  nodes: NodePublic[];
+}
+
 // Roles from contract
 export const ROLES = {
   USER: "user",

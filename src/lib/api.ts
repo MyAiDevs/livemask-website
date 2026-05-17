@@ -8,6 +8,9 @@ import type {
   User,
   AdminMeResponse,
   ApiError,
+  NodePublic,
+  NodeListResponse,
+  RecommendedNodeResponse,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -121,9 +124,146 @@ class AuthApiClient {
     return this.refreshPromise;
   }
 
-  // --- Mock API ---
+  // --- Mock Data ---
 
   private mockStorage = new Map<string, any>();
+
+  private mockNodes: NodePublic[] = [
+    {
+      node_id: "node_us_nyc_01",
+      node_name: "US East (New York)",
+      status: "active",
+      load_score: 0.32,
+      cpu_usage: 34.5,
+      memory_usage: 51.2,
+      active_connections: 1287,
+      degraded: false,
+      last_heartbeat_at: new Date().toISOString(),
+    },
+    {
+      node_id: "node_us_sfo_01",
+      node_name: "US West (San Francisco)",
+      status: "active",
+      load_score: 0.45,
+      cpu_usage: 48.1,
+      memory_usage: 62.0,
+      active_connections: 982,
+      degraded: false,
+      last_heartbeat_at: new Date().toISOString(),
+    },
+    {
+      node_id: "node_eu_lhr_01",
+      node_name: "UK (London)",
+      status: "active",
+      load_score: 0.28,
+      cpu_usage: 29.3,
+      memory_usage: 44.7,
+      active_connections: 1563,
+      degraded: false,
+      last_heartbeat_at: new Date().toISOString(),
+    },
+    {
+      node_id: "node_eu_fra_01",
+      node_name: "Germany (Frankfurt)",
+      status: "active",
+      load_score: 0.38,
+      cpu_usage: 41.0,
+      memory_usage: 55.3,
+      active_connections: 1134,
+      degraded: false,
+      last_heartbeat_at: new Date().toISOString(),
+    },
+    {
+      node_id: "node_ap_sin_01",
+      node_name: "Singapore",
+      status: "active",
+      load_score: 0.41,
+      cpu_usage: 44.2,
+      memory_usage: 58.1,
+      active_connections: 876,
+      degraded: false,
+      last_heartbeat_at: new Date().toISOString(),
+    },
+    {
+      node_id: "node_ap_tky_01",
+      node_name: "Japan (Tokyo)",
+      status: "active",
+      load_score: 0.35,
+      cpu_usage: 37.8,
+      memory_usage: 49.6,
+      active_connections: 1045,
+      degraded: false,
+      last_heartbeat_at: new Date().toISOString(),
+    },
+    {
+      node_id: "node_eu_ams_01",
+      node_name: "Netherlands (Amsterdam)",
+      status: "active",
+      load_score: 0.30,
+      cpu_usage: 33.1,
+      memory_usage: 47.2,
+      active_connections: 1342,
+      degraded: false,
+      last_heartbeat_at: new Date().toISOString(),
+    },
+    {
+      node_id: "node_us_ord_01",
+      node_name: "US Central (Chicago)",
+      status: "degraded",
+      load_score: 0.72,
+      cpu_usage: 78.9,
+      memory_usage: 82.4,
+      active_connections: 534,
+      degraded: true,
+      degraded_reason: "High memory pressure — scheduled maintenance",
+      last_heartbeat_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    },
+    {
+      node_id: "node_au_syd_01",
+      node_name: "Australia (Sydney)",
+      status: "active",
+      load_score: 0.43,
+      cpu_usage: 46.3,
+      memory_usage: 57.8,
+      active_connections: 721,
+      degraded: false,
+      last_heartbeat_at: new Date().toISOString(),
+    },
+    {
+      node_id: "node_sa_gru_01",
+      node_name: "Brazil (São Paulo)",
+      status: "degraded",
+      load_score: 0.81,
+      cpu_usage: 85.2,
+      memory_usage: 79.5,
+      active_connections: 312,
+      degraded: true,
+      degraded_reason: "Network latency spike — under investigation",
+      last_heartbeat_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    },
+    {
+      node_id: "node_eu_ath_01",
+      node_name: "Greece (Athens)",
+      status: "active",
+      load_score: 0.22,
+      cpu_usage: 24.7,
+      memory_usage: 38.1,
+      active_connections: 1894,
+      degraded: false,
+      last_heartbeat_at: new Date().toISOString(),
+    },
+    {
+      node_id: "node_us_mia_01",
+      node_name: "US East (Miami)",
+      status: "active",
+      load_score: 0.47,
+      cpu_usage: 50.3,
+      memory_usage: 61.0,
+      active_connections: 893,
+      degraded: false,
+      last_heartbeat_at: new Date().toISOString(),
+    },
+  ];
 
   private async mockRequest<T>(path: string, options: RequestInit): Promise<T> {
     const body = options.body ? JSON.parse(options.body as string) : {};
@@ -235,6 +375,15 @@ class AuthApiClient {
         } as T;
       }
 
+      case "/api/v1/nodes/recommended": {
+        const recommended = this.mockNodes.filter((n) => n.status === "active" && !n.degraded);
+        return { nodes: recommended } as T;
+      }
+
+      case "/api/v1/nodes": {
+        return { nodes: this.mockNodes, total: this.mockNodes.length } as T;
+      }
+
       default:
         throw { status: 404, code: "NOT_FOUND", message: "Endpoint not found in mock" } as ApiError;
     }
@@ -272,6 +421,14 @@ class AuthApiClient {
 
   async getMe(): Promise<User> {
     return this.request<User>("/api/v1/me", {}, true);
+  }
+
+  async getNodes(): Promise<NodeListResponse> {
+    return this.request<NodeListResponse>("/api/v1/nodes", {}, true);
+  }
+
+  async getRecommendedNodes(): Promise<RecommendedNodeResponse> {
+    return this.request<RecommendedNodeResponse>("/api/v1/nodes/recommended", {}, true);
   }
 
   getAccessToken(): string | null {
