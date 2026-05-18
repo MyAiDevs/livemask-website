@@ -59,6 +59,7 @@ export function BlogArticlePage() {
   if (notFound || !article) {
     return (
       <BlogLayout showBack>
+        <SEO title="Article Not Found" description="The requested article could not be found." robots="noindex,follow" />
         <div className="max-w-2xl mx-auto px-4 py-32 text-center">
           <h1 className="text-4xl font-bold text-foreground mb-4">404</h1>
           <p className="text-muted-foreground text-sm mb-8">

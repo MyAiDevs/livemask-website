@@ -167,17 +167,52 @@ export function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border/50 py-8 px-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between text-xs text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-teal-500" />
-            <span>LiveMask &copy; {new Date().getFullYear()}</span>
+      <footer className="border-t border-border/50 py-10 px-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid md:grid-cols-4 gap-8 mb-8">
+            {/* Brand */}
+            <div className="md:col-span-1">
+              <Link to="/" className="flex items-center gap-2 mb-3">
+                <Shield className="h-4 w-4 text-teal-500" />
+                <span className="text-sm font-bold text-foreground">LiveMask</span>
+              </Link>
+              <p className="text-[11px] text-muted-foreground leading-relaxed max-w-[200px]">
+                Enterprise-grade VPN protection with blazing-fast speeds and a strict no-logs policy.
+              </p>
+            </div>
+            {/* Product */}
+            <div>
+              <h4 className="text-xs font-semibold text-foreground mb-3">Product</h4>
+              <div className="flex flex-col gap-2">
+                <Link to="/pricing" className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Pricing</Link>
+                <Link to="/download" className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Download</Link>
+                <Link to="/security" className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Security</Link>
+                <Link to="/faq" className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">FAQ</Link>
+              </div>
+            </div>
+            {/* Blog */}
+            <div>
+              <h4 className="text-xs font-semibold text-foreground mb-3">Blog</h4>
+              <div className="flex flex-col gap-2">
+                <Link to="/blog" className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">All Articles</Link>
+                <Link to="/blog/category/privacy" className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Privacy</Link>
+                <Link to="/blog/category/security" className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Security</Link>
+                <Link to="/blog/category/technology" className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Technology</Link>
+                <Link to="/blog/category/guides" className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Guides</Link>
+              </div>
+            </div>
+            {/* Legal & Contact */}
+            <div>
+              <h4 className="text-xs font-semibold text-foreground mb-3">Legal</h4>
+              <div className="flex flex-col gap-2">
+                <a href="#" className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Privacy Policy</a>
+                <a href="#" className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Terms of Service</a>
+                <a href="#" className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Contact</a>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <a href="#" className="hover:text-foreground transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-foreground transition-colors">Terms of Service</a>
-            <Link to="/blog" className="hover:text-foreground transition-colors">Blog</Link>
-            <a href="#" className="hover:text-foreground transition-colors">Contact</a>
+          <div className="pt-6 border-t border-border/30 text-center text-[11px] text-muted-foreground">
+            <span>LiveMask &copy; {new Date().getFullYear()}. All rights reserved.</span>
           </div>
         </div>
       </footer>

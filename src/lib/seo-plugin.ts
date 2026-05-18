@@ -1,7 +1,8 @@
 /**
  * Vite plugin to generate sitemap.xml and rss.xml at build time.
  *
- * Reads mock data (or API data in production) and writes XML files to the output directory.
+ * Fetches real article, category, and tag data from the Backend API at build time.
+ * Falls back to mock data when the API is unreachable (e.g. local dev without backend).
  */
 
 import type { Plugin, ResolvedConfig } from "vite";
@@ -24,11 +25,81 @@ interface RssItem {
   guid: string;
 }
 
-const SITE_URL = "https://livemask.com";
+interface ApiArticle {
+  slug: string;
+  title: string;
+  excerpt: string;
+  author_name: string;
+  published_at: string;
+  updated_at: string;
+}
 
-// Mock article data for sitemap/RSS generation
-// In production, this would fetch from the Backend API
-function getMockArticles() {
+interface ApiCategory {
+  name: string;
+  slug: string;
+  article_count: number;
+}
+
+interface ApiTag {
+  name: string;
+  slug: string;
+  article_count: number;
+}
+
+const SITE_URL = "https://livemask.com";
+const API_BASE = process.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+// ── API fetch helpers with fallback ──────────────────────────────────
+
+async function fetchFromApi<T>(
+  path: string,
+): Promise<{ ok: true; data: T } | { ok: false }> {
+  try {
+    const url = `${API_BASE}${path}`;
+    const res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return { ok: false };
+    return { ok: true, data: (await res.json()) as T };
+  } catch {
+    return { ok: false };
+  }
+}
+
+async function fetchArticles(): Promise<ApiArticle[]> {
+  const result = await fetchFromApi<{ items: ApiArticle[] }>(
+    "/api/v1/content/blog?limit=100",
+  );
+  if (result.ok && result.data.items?.length > 0) {
+    return result.data.items;
+  }
+  return getMockArticles();
+}
+
+async function fetchCategories(): Promise<ApiCategory[]> {
+  const result = await fetchFromApi<{ categories: ApiCategory[] }>(
+    "/api/v1/content/blog/categories",
+  );
+  if (result.ok && result.data.categories?.length > 0) {
+    return result.data.categories;
+  }
+  return getMockCategories();
+}
+
+async function fetchTags(): Promise<ApiTag[]> {
+  const result = await fetchFromApi<{ tags: ApiTag[] }>(
+    "/api/v1/content/blog/tags",
+  );
+  if (result.ok && result.data.tags?.length > 0) {
+    return result.data.tags;
+  }
+  return getMockTags();
+}
+
+// ── Mock fallback data ───────────────────────────────────────────────
+
+function getMockArticles(): ApiArticle[] {
   return [
     {
       slug: "what-is-vpn-and-why-you-need-it",
@@ -141,6 +212,30 @@ function getMockArticles() {
   ];
 }
 
+function getMockCategories(): ApiCategory[] {
+  return [
+    { name: "Privacy", slug: "privacy", article_count: 4 },
+    { name: "Security", slug: "security", article_count: 3 },
+    { name: "Technology", slug: "technology", article_count: 3 },
+    { name: "Guides", slug: "guides", article_count: 2 },
+  ];
+}
+
+function getMockTags(): ApiTag[] {
+  return [
+    { name: "Encryption", slug: "Encryption", article_count: 3 },
+    { name: "VPN", slug: "VPN", article_count: 5 },
+    { name: "Privacy", slug: "Privacy", article_count: 4 },
+    { name: "Security", slug: "Security", article_count: 4 },
+    { name: "Streaming", slug: "Streaming", article_count: 2 },
+    { name: "Tutorial", slug: "Tutorial", article_count: 3 },
+    { name: "WireGuard", slug: "WireGuard", article_count: 1 },
+    { name: "OpenVPN", slug: "OpenVPN", article_count: 1 },
+  ];
+}
+
+// ── XML generation ──────────────────────────────────────────────────
+
 function escapeXml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
@@ -150,21 +245,21 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function generateSitemapXml(articles: SitemapUrl[]): string {
-  const urls = articles
+function generateSitemapXml(urls: SitemapUrl[]): string {
+  const urlElements = urls
     .map(
-      (a) => `  <url>
-    <loc>${escapeXml(a.loc)}</loc>
-    <lastmod>${a.lastmod}</lastmod>
-    <changefreq>${a.changefreq}</changefreq>
-    <priority>${a.priority}</priority>
-  </url>`
+      (u) => `  <url>
+    <loc>${escapeXml(u.loc)}</loc>
+    <lastmod>${u.lastmod}</lastmod>
+    <changefreq>${u.changefreq}</changefreq>
+    <priority>${u.priority}</priority>
+  </url>`,
     )
     .join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls}
+${urlElements}
 </urlset>`;
 }
 
@@ -175,7 +270,7 @@ function generateRssXml(feed: {
   language: string;
   items: RssItem[];
 }): string {
-  const items = feed.items
+  const itemElements = feed.items
     .map(
       (item) => `  <item>
     <title>${escapeXml(item.title)}</title>
@@ -184,7 +279,7 @@ function generateRssXml(feed: {
     <author>${escapeXml(item.author)}</author>
     <pubDate>${new Date(item.pub_date).toUTCString()}</pubDate>
     <guid>${escapeXml(item.guid)}</guid>
-  </item>`
+  </item>`,
     )
     .join("\n");
 
@@ -196,23 +291,37 @@ function generateRssXml(feed: {
     <description>${escapeXml(feed.description)}</description>
     <language>${feed.language}</language>
     <atom:link href="${escapeXml(feed.link)}" rel="self" type="application/rss+xml"/>
-${items}
+${itemElements}
   </channel>
 </rss>`;
 }
 
-function generateAllXml(): { sitemap: string; rss: string } {
-  const articles = getMockArticles();
+// ── Main generation (async — tries API first, falls back to mock) ────
 
+async function generateAllXml(): Promise<{ sitemap: string; rss: string }> {
+  const [articles, categories, tags] = await Promise.all([
+    fetchArticles(),
+    fetchCategories(),
+    fetchTags(),
+  ]);
+
+  const dataSource =
+    articles === getMockArticles() ? "mock data" : "Backend API";
+  console.log(`[seo-plugin] Fetched ${articles.length} articles, ${categories.length} categories, ${tags.length} tags from ${dataSource}`);
+
+  const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+
+  // Static pages
   const staticPages: SitemapUrl[] = [
-    { loc: `${SITE_URL}/`, lastmod: "2026-01-01T00:00:00Z", changefreq: "monthly", priority: 1.0 },
-    { loc: `${SITE_URL}/pricing`, lastmod: "2026-01-01T00:00:00Z", changefreq: "monthly", priority: 0.8 },
-    { loc: `${SITE_URL}/download`, lastmod: "2026-01-01T00:00:00Z", changefreq: "monthly", priority: 0.7 },
-    { loc: `${SITE_URL}/security`, lastmod: "2026-01-01T00:00:00Z", changefreq: "monthly", priority: 0.6 },
-    { loc: `${SITE_URL}/faq`, lastmod: "2026-01-01T00:00:00Z", changefreq: "monthly", priority: 0.5 },
-    { loc: `${SITE_URL}/blog`, lastmod: articles[0]?.updated_at || "2026-01-01T00:00:00Z", changefreq: "daily", priority: 0.9 },
+    { loc: `${SITE_URL}/`, lastmod: now, changefreq: "monthly", priority: 1.0 },
+    { loc: `${SITE_URL}/pricing`, lastmod: now, changefreq: "monthly", priority: 0.8 },
+    { loc: `${SITE_URL}/download`, lastmod: now, changefreq: "monthly", priority: 0.7 },
+    { loc: `${SITE_URL}/security`, lastmod: now, changefreq: "monthly", priority: 0.6 },
+    { loc: `${SITE_URL}/faq`, lastmod: now, changefreq: "monthly", priority: 0.5 },
+    { loc: `${SITE_URL}/blog`, lastmod: articles[0]?.updated_at || now, changefreq: "daily", priority: 0.9 },
   ];
 
+  // Blog article pages
   const blogUrls: SitemapUrl[] = articles.map((a) => ({
     loc: `${SITE_URL}/blog/${a.slug}`,
     lastmod: a.updated_at,
@@ -220,7 +329,24 @@ function generateAllXml(): { sitemap: string; rss: string } {
     priority: 0.8,
   }));
 
-  const sitemapXml = generateSitemapXml([...staticPages, ...blogUrls]);
+  // Blog category pages (preserve original slug — some backends use lowercase, some mixed)
+  const categoryUrls: SitemapUrl[] = categories.map((c) => ({
+    loc: `${SITE_URL}/blog/category/${c.slug}`,
+    lastmod: now,
+    changefreq: "weekly" as const,
+    priority: 0.7,
+  }));
+
+  // Blog tag pages (preserve original slug case)
+  const tagUrls: SitemapUrl[] = tags.map((t) => ({
+    loc: `${SITE_URL}/blog/tag/${t.slug}`,
+    lastmod: now,
+    changefreq: "weekly" as const,
+    priority: 0.6,
+  }));
+
+  const allUrls = [...staticPages, ...blogUrls, ...categoryUrls, ...tagUrls];
+  const sitemapXml = generateSitemapXml(allUrls);
 
   const rssItems: RssItem[] = articles.map((a) => ({
     title: a.title,
@@ -233,7 +359,8 @@ function generateAllXml(): { sitemap: string; rss: string } {
 
   const rssXml = generateRssXml({
     title: "LiveMask Blog",
-    description: "Latest articles about VPN technology, online privacy, and security tips from LiveMask.",
+    description:
+      "Latest articles about VPN technology, online privacy, and security tips from LiveMask.",
     link: `${SITE_URL}/rss.xml`,
     language: "en-us",
     items: rssItems,
@@ -241,6 +368,8 @@ function generateAllXml(): { sitemap: string; rss: string } {
 
   return { sitemap: sitemapXml, rss: rssXml };
 }
+
+// ── Vite plugin ─────────────────────────────────────────────────────
 
 export function seoPlugin(): Plugin {
   let config: ResolvedConfig;
@@ -251,20 +380,20 @@ export function seoPlugin(): Plugin {
       config = resolvedConfig;
     },
     configureServer(server) {
-      server.middlewares.use("/sitemap.xml", (_req, res) => {
-        const { sitemap } = generateAllXml();
+      server.middlewares.use("/sitemap.xml", async (_req, res) => {
+        const { sitemap } = await generateAllXml();
         res.setHeader("Content-Type", "application/xml");
         res.end(sitemap);
       });
-      server.middlewares.use("/rss.xml", (_req, res) => {
-        const { rss } = generateAllXml();
+      server.middlewares.use("/rss.xml", async (_req, res) => {
+        const { rss } = await generateAllXml();
         res.setHeader("Content-Type", "application/rss+xml");
         res.end(rss);
       });
     },
-    closeBundle() {
+    async closeBundle() {
       const outDir = config.build.outDir;
-      const { sitemap: sitemapXml, rss: rssXml } = generateAllXml();
+      const { sitemap: sitemapXml, rss: rssXml } = await generateAllXml();
 
       const sitemapPath = path.resolve(outDir, "sitemap.xml");
       fs.mkdirSync(path.dirname(sitemapPath), { recursive: true });
