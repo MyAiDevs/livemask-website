@@ -195,7 +195,7 @@ export function BlogArticlePage() {
             {article.tags.map((tag) => (
               <Link
                 key={tag}
-                to={`/blog/tag/${tag.toLowerCase().replace(/\s+/g, "-")}`}
+                to={`/blog/tag/${encodeURIComponent(tag)}`}
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-card border border-border/30 text-muted-foreground hover:text-foreground hover:border-border/60 transition-colors"
               >
                 <Tag className="h-2.5 w-2.5" />
@@ -243,7 +243,7 @@ export function BlogArticlePage() {
               {article.tags.map((tag) => (
                 <Link
                   key={tag}
-                  to={`/blog/tag/${tag.toLowerCase().replace(/\s+/g, "-")}`}
+                  to={`/blog/tag/${encodeURIComponent(tag)}`}
                   className="text-teal-400 hover:text-teal-300 transition-colors"
                 >
                   #{tag}

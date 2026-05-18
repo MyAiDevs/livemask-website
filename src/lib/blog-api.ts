@@ -81,7 +81,10 @@ class BlogApiClient {
       let items = this.mockArticles();
 
       if (category) items = items.filter((a) => a.category === category);
-      if (tag) items = items.filter((a) => a.tags.includes(tag));
+      if (tag) {
+        const lcTag = tag.toLowerCase();
+        items = items.filter((a) => a.tags.some((t) => t.toLowerCase() === lcTag));
+      }
       if (q) {
         const lq = q.toLowerCase();
         items = items.filter(
@@ -124,14 +127,14 @@ class BlogApiClient {
     if (path === "/api/v1/content/blog/tags") {
       return {
         tags: [
-          { name: "Encryption", slug: "encryption", article_count: 3 },
-          { name: "VPN", slug: "vpn", article_count: 5 },
-          { name: "Privacy", slug: "privacy", article_count: 4 },
-          { name: "Security", slug: "security", article_count: 4 },
-          { name: "Streaming", slug: "streaming", article_count: 2 },
-          { name: "Tutorial", slug: "tutorial", article_count: 3 },
-          { name: "WireGuard", slug: "wireguard", article_count: 1 },
-          { name: "OpenVPN", slug: "openvpn", article_count: 1 },
+          { name: "Encryption", slug: "Encryption", article_count: 3 },
+          { name: "VPN", slug: "VPN", article_count: 5 },
+          { name: "Privacy", slug: "Privacy", article_count: 4 },
+          { name: "Security", slug: "Security", article_count: 4 },
+          { name: "Streaming", slug: "Streaming", article_count: 2 },
+          { name: "Tutorial", slug: "Tutorial", article_count: 3 },
+          { name: "WireGuard", slug: "WireGuard", article_count: 1 },
+          { name: "OpenVPN", slug: "OpenVPN", article_count: 1 },
         ],
       } as T;
     }

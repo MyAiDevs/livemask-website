@@ -18,16 +18,14 @@ export function BlogTagPage() {
   useEffect(() => {
     if (!tag) return;
     setLoading(true);
-    // Convert tag slug back to tag name for filtering
-    const tagName = tag.replace(/-/g, " ");
     blogClient
-      .getArticles({ tag: tagName, limit: 50 })
+      .getArticles({ tag, limit: 50 })
       .then((res) => setArticles(res.items))
       .catch((err) => console.error("Failed to fetch tag articles:", err))
       .finally(() => setLoading(false));
   }, [tag]);
 
-  const tagName = tag ? tag.replace(/-/g, " ") : "Unknown";
+  const tagName = tag ? decodeURIComponent(tag) : "Unknown";
 
   const breadcrumbJsonLd = createBreadcrumbJsonLd([
     { name: "Home", url: SITE_URL },
