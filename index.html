@@ -1,17 +1,48 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="LiveMask - Secure VPN for privacy and freedom" />
-    <title>LiveMask - Secure VPN</title>
+    <meta name="description" content="LiveMask - 安全上网，自由访问" />
+    <title>LiveMask - 安全上网，自由访问</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- Sitemap / RSS discovery for crawlers -->
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+    <link rel="alternate" type="application/rss+xml" title="LiveMask Blog" href="/rss.xml" />
+    <!-- hreflang for default landing page -->
+    <link rel="alternate" href="https://livemask.com/zh-CN" hreflang="x-default" />
+    <link rel="alternate" href="https://livemask.com/zh-CN" hreflang="zh-CN" />
+    <link rel="alternate" href="https://livemask.com/en-US" hreflang="en-US" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Static crawler-visible navigation (SPA fallback) -->
+      <!-- zh-CN (default locale) -->
+      <noscript>
+        <div style="display:none" aria-hidden="true">
+          <a href="/zh-CN">首页</a>
+          <a href="/zh-CN/pricing">定价</a>
+          <a href="/zh-CN/download">下载</a>
+          <a href="/zh-CN/security">安全</a>
+          <a href="/zh-CN/blog">博客</a>
+          <a href="/zh-CN/blog/category/privacy">隐私文章</a>
+          <a href="/zh-CN/blog/category/security">安全文章</a>
+          <a href="/zh-CN/blog/category/technology">技术文章</a>
+          <a href="/zh-CN/blog/category/guides">指南文章</a>
+          <a href="/zh-CN/faq">常见问题</a>
+          <a href="/sitemap.xml">网站地图</a>
+          <a href="/rss.xml">RSS 订阅</a>
+          <a href="/en-US">English</a>
+          <a href="/en-US/pricing">Pricing</a>
+          <a href="/en-US/download">Download</a>
+          <a href="/en-US/blog">Blog</a>
+          <a href="/en-US/faq">FAQ</a>
+        </div>
+      </noscript>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import { SITE_URL, localePath, stripLocaleFromPath } from "@/lib/locale";
 
 interface SEOProps {
   title: string;
@@ -14,11 +15,11 @@ interface SEOProps {
   modifiedTime?: string;
   author?: string;
   jsonLd?: Record<string, unknown> | Record<string, unknown>[];
+  /** Set to true to skip hreflang (e.g. for error pages). */
+  noHreflang?: boolean;
 }
 
 const SITE_NAME = "LiveMask";
-const SITE_URL = "https://livemask.com";
-const DEFAULT_DESC = "LiveMask - Secure VPN for privacy and freedom";
 const DEFAULT_OG_IMAGE = "https://livemask.com/og-image.jpg";
 
 export function SEO({
@@ -35,6 +36,7 @@ export function SEO({
   modifiedTime,
   author,
   jsonLd,
+  noHreflang,
 }: SEOProps) {
   const fullTitle = `${title} | ${SITE_NAME}`;
   const finalOgTitle = ogTitle || title;
@@ -47,6 +49,9 @@ export function SEO({
       <title>{fullTitle}</title>
       <meta name="description" content={description} />
       <link rel="canonical" href={finalCanonical} />
+
+      {/* hreflang — auto-generated from current path */}
+      {!noHreflang && renderHreflangLinks(window.location.pathname)}
 
       <meta property="og:site_name" content={SITE_NAME} />
       <meta property="og:title" content={finalOgTitle} />
@@ -85,6 +90,27 @@ export function SEO({
   );
 }
 
+/**
+ * Render <link> elements for hreflang alternates.
+ * Generates:
+ *   - x-default → zh-CN (default locale)
+ *   - zh-CN
+ *   - en-US
+ */
+function renderHreflangLinks(pathname: string) {
+  const stripped = stripLocaleFromPath(pathname);
+  const zhUrl = `${SITE_URL}${localePath(stripped, "zh-CN")}`;
+  const enUrl = `${SITE_URL}${localePath(stripped, "en-US")}`;
+
+  return (
+    <>
+      <link rel="alternate" href={zhUrl} hrefLang="x-default" />
+      <link rel="alternate" href={zhUrl} hrefLang="zh-CN" />
+      <link rel="alternate" href={enUrl} hrefLang="en-US" />
+    </>
+  );
+}
+
 export function createBlogPostingJsonLd(article: {
   title: string;
   description: string;
@@ -93,6 +119,7 @@ export function createBlogPostingJsonLd(article: {
   published_at: string;
   updated_at: string;
   canonical_url: string;
+  inLanguage?: string;
 }): Record<string, unknown> {
   return {
     "@context": "https://schema.org",
@@ -110,6 +137,7 @@ export function createBlogPostingJsonLd(article: {
       "@type": "WebPage",
       "@id": article.canonical_url,
     },
+    ...(article.inLanguage ? { inLanguage: article.inLanguage } : {}),
   };
 }
 

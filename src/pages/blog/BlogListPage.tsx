@@ -3,9 +3,10 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Search, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { BlogLayout } from "@/components/BlogLayout";
 import { ArticleCard } from "@/components/ArticleCard";
-import { SEO, createBreadcrumbJsonLd, SITE_URL } from "@/components/SEO";
+import { SEO, SITE_URL } from "@/components/SEO";
 import { blogClient } from "@/lib/blog-api";
 import type { ArticleSummary, BlogCategory, BlogTag } from "@/lib/blog-types";
+import { useLocale } from "@/lib/locale";
 
 const MOCK_MODE = blogClient.isMockMode();
 const isDev = import.meta.env.DEV;
@@ -18,6 +19,7 @@ export function BlogListPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
+  const { locale, t } = useLocale();
 
   const activeCategory = searchParams.get("category") || "";
   const activeTag = searchParams.get("tag") || "";
@@ -28,6 +30,7 @@ export function BlogListPage() {
     setLoading(true);
     try {
       const params: Record<string, string | number | boolean | undefined> = {
+        locale,
         page,
         limit,
       };
@@ -49,7 +52,7 @@ export function BlogListPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, activeCategory, activeTag, searchQuery]);
+  }, [locale, page, activeCategory, activeTag, searchQuery]);
 
   useEffect(() => {
     fetchData();
@@ -75,19 +78,15 @@ export function BlogListPage() {
 
   const hasFilters = activeCategory || activeTag || searchQuery;
 
-  const breadcrumbJsonLd = createBreadcrumbJsonLd([
-    { name: "Home", url: SITE_URL },
-    { name: "Blog", url: `${SITE_URL}/blog` },
-  ]);
-
   const title = activeCategory
-    ? `${activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} Articles`
+    ? `${activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)}`
     : activeTag
-      ? `#${activeTag} Articles`
-      : "Blog";
+      ? `#${activeTag}`
+      : (locale === "zh-CN" ? "博客" : "Blog");
 
-  const description =
-    "Discover articles about VPN technology, online privacy, security tips, and guides from the LiveMask team.";
+  const description = locale === "zh-CN"
+    ? "发现来自 LiveMask 团队的VPN技术、在线隐私、安全技巧和指南文章。"
+    : "Discover articles about VPN technology, online privacy, security tips, and guides from the LiveMask team.";
 
   return (
     <BlogLayout>
@@ -100,7 +99,6 @@ export function BlogListPage() {
             : `${SITE_URL}/blog`
         }
         robots="index,follow"
-        jsonLd={breadcrumbJsonLd}
       />
 
       <div className="max-w-6xl mx-auto px-4 py-12">
@@ -109,18 +107,18 @@ export function BlogListPage() {
           <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
             {activeCategory ? (
               <>
-                Articles in{" "}
+                {locale === "zh-CN" ? "分类：" : "Articles in "}
                 <span className="text-teal-400">
                   {activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)}
                 </span>
               </>
             ) : activeTag ? (
               <>
-                Articles tagged{" "}
+                {locale === "zh-CN" ? "标签：" : "Articles tagged "}
                 <span className="text-teal-400">#{activeTag}</span>
               </>
             ) : (
-              "LiveMask Blog"
+              locale === "zh-CN" ? "LiveMask 博客" : "LiveMask Blog"
             )}
           </h1>
           <p className="text-sm text-muted-foreground max-w-xl mx-auto">
@@ -136,7 +134,7 @@ export function BlogListPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search articles..."
+              placeholder={t("search")}
               className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-card border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-teal-500/50 focus:border-teal-500/50"
             />
           </div>
@@ -145,26 +143,26 @@ export function BlogListPage() {
         {/* Category Filter */}
         <div className="flex flex-wrap justify-center gap-2 mb-6">
           <Link
-            to="/blog"
+            to={window.location.pathname.replace(/\/blog.*/, "/blog")}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
               !activeCategory
                 ? "bg-teal-600 text-white"
                 : "bg-card border border-border/50 text-muted-foreground hover:text-foreground"
             }`}
           >
-            All
+            {locale === "zh-CN" ? "全部" : "All"}
           </Link>
           {categories.map((cat) => (
             <Link
               key={cat.slug}
-              to={`/blog/category/${cat.slug}`}
+              to={window.location.pathname.replace(/\/blog.*/, `/blog/category/${cat.slug}`)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 activeCategory === cat.slug
                   ? "bg-teal-600 text-white"
                   : "bg-card border border-border/50 text-muted-foreground hover:text-foreground"
               }`}
             >
-              {cat.name}
+              {locale === "zh-CN" ? getChineseCategory(cat.name) : cat.name}
             </Link>
           ))}
         </div>
@@ -175,7 +173,7 @@ export function BlogListPage() {
             {tags.map((tag) => (
               <Link
                 key={tag.slug}
-                to={`/blog/tag/${tag.slug}`}
+                to={window.location.pathname.replace(/\/blog.*/, `/blog/tag/${tag.slug}`)}
                 className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
                   activeTag === tag.slug
                     ? "bg-teal-600/20 text-teal-400 border border-teal-500/30"
@@ -195,7 +193,7 @@ export function BlogListPage() {
               onClick={clearFilters}
               className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
             >
-              Clear all filters
+              {t("clear-filters")}
             </button>
           </div>
         )}
@@ -211,7 +209,7 @@ export function BlogListPage() {
 
         {/* Loading */}
         {loading && (
-          <div className="flex justify-center py-20">
+          <div className="flex justify-center py-20" data-skeleton>
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         )}
@@ -235,7 +233,7 @@ export function BlogListPage() {
             ) : !loading ? (
               <div className="text-center py-16">
                 <p className="text-muted-foreground text-sm">
-                  No articles found.
+                  {t("no-articles")}
                 </p>
               </div>
             ) : null}
@@ -244,7 +242,7 @@ export function BlogListPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-4 mt-12">
                 <Link
-                  to={`/blog?page=${page - 1}${activeCategory ? `&category=${activeCategory}` : ""}${activeTag ? `&tag=${activeTag}` : ""}${searchQuery ? `&q=${searchQuery}` : ""}`}
+                  to={`${window.location.pathname}?page=${page - 1}${activeCategory ? `&category=${activeCategory}` : ""}${activeTag ? `&tag=${activeTag}` : ""}${searchQuery ? `&q=${searchQuery}` : ""}`}
                   className={`inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
                     page <= 1
                       ? "text-muted-foreground/40 pointer-events-none"
@@ -253,13 +251,13 @@ export function BlogListPage() {
                   aria-disabled={page <= 1}
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
-                  Previous
+                  {t("previous")}
                 </Link>
                 <span className="text-xs text-muted-foreground">
-                  Page {page} of {totalPages}
+                  {locale === "zh-CN" ? `第 ${page} 页，共 ${totalPages} 页` : `Page ${page} of ${totalPages}`}
                 </span>
                 <Link
-                  to={`/blog?page=${page + 1}${activeCategory ? `&category=${activeCategory}` : ""}${activeTag ? `&tag=${activeTag}` : ""}${searchQuery ? `&q=${searchQuery}` : ""}`}
+                  to={`${window.location.pathname}?page=${page + 1}${activeCategory ? `&category=${activeCategory}` : ""}${activeTag ? `&tag=${activeTag}` : ""}${searchQuery ? `&q=${searchQuery}` : ""}`}
                   className={`inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
                     page >= totalPages
                       ? "text-muted-foreground/40 pointer-events-none"
@@ -267,27 +265,9 @@ export function BlogListPage() {
                   }`}
                   aria-disabled={page >= totalPages}
                 >
-                  Next
+                  {t("next")}
                   <ChevronRight className="h-3.5 w-3.5" />
                 </Link>
-              </div>
-            )}
-
-            {/* Pagination link rel=canonical/prev/next strategy */}
-            {totalPages > 1 && (
-              <div className="hidden" aria-hidden="true">
-                {page > 1 && (
-                  <link
-                    rel="prev"
-                    href={`${SITE_URL}/blog?page=${page - 1}${activeCategory ? `&category=${activeCategory}` : ""}${activeTag ? `&tag=${activeTag}` : ""}`}
-                  />
-                )}
-                {page < totalPages && (
-                  <link
-                    rel="next"
-                    href={`${SITE_URL}/blog?page=${page + 1}${activeCategory ? `&category=${activeCategory}` : ""}${activeTag ? `&tag=${activeTag}` : ""}`}
-                  />
-                )}
               </div>
             )}
           </>
@@ -295,4 +275,14 @@ export function BlogListPage() {
       </div>
     </BlogLayout>
   );
+}
+
+function getChineseCategory(englishName: string): string {
+  const map: Record<string, string> = {
+    "Privacy": "隐私",
+    "Security": "安全",
+    "Technology": "技术",
+    "Guides": "指南",
+  };
+  return map[englishName] || englishName;
 }

@@ -3,15 +3,17 @@ import { useParams, Link } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { BlogLayout } from "@/components/BlogLayout";
 import { ArticleCard } from "@/components/ArticleCard";
-import { SEO, createBreadcrumbJsonLd, SITE_URL } from "@/components/SEO";
+import { SEO, SITE_URL } from "@/components/SEO";
 import { blogClient } from "@/lib/blog-api";
 import type { ArticleSummary } from "@/lib/blog-types";
+import { useLocale, localePath } from "@/lib/locale";
 
 const MOCK_MODE = blogClient.isMockMode();
 const isDev = import.meta.env.DEV;
 
 export function BlogCategoryPage() {
   const { category } = useParams<{ category: string }>();
+  const { locale } = useLocale();
   const [articles, setArticles] = useState<ArticleSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,40 +21,39 @@ export function BlogCategoryPage() {
     if (!category) return;
     setLoading(true);
     blogClient
-      .getArticles({ category, limit: 50 })
+      .getArticles({ locale, category, limit: 50 })
       .then((res) => setArticles(res.items))
       .catch((err) => console.error("Failed to fetch category articles:", err))
       .finally(() => setLoading(false));
-  }, [category]);
+  }, [category, locale]);
 
   const categoryName = category
     ? category.charAt(0).toUpperCase() + category.replace(/-/g, " ").slice(1)
     : "Unknown";
 
-  const breadcrumbJsonLd = createBreadcrumbJsonLd([
-    { name: "Home", url: SITE_URL },
-    { name: "Blog", url: `${SITE_URL}/blog` },
-    { name: categoryName, url: `${SITE_URL}/blog/category/${category}` },
-  ]);
-
   return (
     <BlogLayout showBack>
       <SEO
-        title={`${categoryName} Articles`}
-        description={`Browse all articles in the ${categoryName} category. Learn about ${categoryName.toLowerCase()} tips, guides, and best practices.`}
-        canonical={`${SITE_URL}/blog/category/${category}`}
+        title={locale === "zh-CN" ? `${categoryName} 文章` : `${categoryName} Articles`}
+        description={
+          locale === "zh-CN"
+            ? `浏览${categoryName}分类中的所有文章。了解${categoryName.toLowerCase()}的技巧、指南和最佳实践。`
+            : `Browse all articles in the ${categoryName} category. Learn about ${categoryName.toLowerCase()} tips, guides, and best practices.`
+        }
+        canonical={`${SITE_URL}${localePath(`/blog/category/${category}`, locale)}`}
         robots="index,follow"
-        jsonLd={breadcrumbJsonLd}
       />
 
       <div className="max-w-6xl mx-auto px-4 py-12">
         <div className="text-center mb-10">
           <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
-            Category:{" "}
+            {locale === "zh-CN" ? "分类：" : "Category: "}
             <span className="text-teal-400">{categoryName}</span>
           </h1>
           <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-            Browse all articles in the {categoryName.toLowerCase()} category.
+            {locale === "zh-CN"
+              ? `浏览${categoryName}分类中的所有文章。`
+              : `Browse all articles in the ${categoryName.toLowerCase()} category.`}
           </p>
         </div>
 
@@ -65,7 +66,7 @@ export function BlogCategoryPage() {
         )}
 
         {loading ? (
-          <div className="flex justify-center py-20">
+          <div className="flex justify-center py-20" data-skeleton>
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : articles.length > 0 ? (
@@ -77,13 +78,13 @@ export function BlogCategoryPage() {
         ) : (
           <div className="text-center py-16">
             <p className="text-muted-foreground text-sm">
-              No articles found in this category.
+              {locale === "zh-CN" ? "该分类中没有文章。" : "No articles found in this category."}
             </p>
             <Link
-              to="/blog"
+              to={localePath("/blog", locale)}
               className="inline-block mt-4 text-xs text-teal-400 hover:text-teal-300 transition-colors"
             >
-              View all articles
+              {locale === "zh-CN" ? "查看所有文章" : "View all articles"}
             </Link>
           </div>
         )}

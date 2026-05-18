@@ -11,6 +11,7 @@ import {
 } from "@/components/SEO";
 import { blogClient } from "@/lib/blog-api";
 import type { ArticleDetail } from "@/lib/blog-types";
+import { useLocale, localePath } from "@/lib/locale";
 
 const MOCK_MODE = blogClient.isMockMode();
 const isDev = import.meta.env.DEV;
@@ -18,6 +19,7 @@ const isProd = import.meta.env.PROD;
 
 export function BlogArticlePage() {
   const { slug } = useParams<{ slug: string }>();
+  const { locale } = useLocale();
   const [article, setArticle] = useState<ArticleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -31,7 +33,7 @@ export function BlogArticlePage() {
     setLoading(true);
     setNotFound(false);
     blogClient
-      .getArticle(slug)
+      .getArticle(slug, locale)
       .then((res) => {
         if (!res.article) {
           setNotFound(true);
@@ -44,12 +46,12 @@ export function BlogArticlePage() {
         setNotFound(true);
       })
       .finally(() => setLoading(false));
-  }, [slug]);
+  }, [slug, locale]);
 
   if (loading) {
     return (
       <BlogLayout showBack>
-        <div className="flex justify-center py-32">
+        <div className="flex justify-center py-32" data-skeleton>
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       </BlogLayout>
@@ -59,17 +61,22 @@ export function BlogArticlePage() {
   if (notFound || !article) {
     return (
       <BlogLayout showBack>
-        <SEO title="Article Not Found" description="The requested article could not be found." robots="noindex,follow" />
+        <SEO
+          title={locale === "zh-CN" ? "文章未找到" : "Article Not Found"}
+          description={locale === "zh-CN" ? "请求的文章未找到。" : "The requested article could not be found."}
+          robots="noindex,follow"
+          noHreflang
+        />
         <div className="max-w-2xl mx-auto px-4 py-32 text-center">
           <h1 className="text-4xl font-bold text-foreground mb-4">404</h1>
           <p className="text-muted-foreground text-sm mb-8">
-            Article not found. It may have been removed or the link is incorrect.
+            {locale === "zh-CN" ? "文章未找到。它可能已被删除或链接不正确。" : "Article not found. It may have been removed or the link is incorrect."}
           </p>
           <Link
-            to="/blog"
+            to={localePath("/blog", locale)}
             className="inline-flex items-center px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium transition-colors"
           >
-            Back to Blog
+            {locale === "zh-CN" ? "返回博客" : "Back to Blog"}
           </Link>
         </div>
       </BlogLayout>
@@ -81,7 +88,7 @@ export function BlogArticlePage() {
   const ogTitle = article.og_title || seoTitle;
   const ogDesc = article.og_description || seoDesc;
   const ogImage = article.og_image_url || article.cover_image_url;
-  const canonical = article.canonical_url || `${SITE_URL}/blog/${article.slug}`;
+  const canonical = article.canonical_url || `${SITE_URL}${localePath(`/blog/${article.slug}`, locale)}`;
   const robots = article.robots || "index,follow";
 
   const isNoIndex = robots.includes("noindex");
@@ -94,20 +101,22 @@ export function BlogArticlePage() {
     published_at: article.published_at,
     updated_at: article.updated_at,
     canonical_url: canonical,
+    inLanguage: locale,
   });
 
   const breadcrumbJsonLd = createBreadcrumbJsonLd([
-    { name: "Home", url: SITE_URL },
-    { name: "Blog", url: `${SITE_URL}/blog` },
+    { name: locale === "zh-CN" ? "首页" : "Home", url: SITE_URL },
+    { name: locale === "zh-CN" ? "博客" : "Blog", url: `${SITE_URL}${localePath("/blog", locale)}` },
     { name: article.title, url: canonical },
   ]);
 
-  const publishedDate = new Date(article.published_at).toLocaleDateString("en-US", {
+  const dateLocale = locale === "zh-CN" ? "zh-CN" : "en-US";
+  const publishedDate = new Date(article.published_at).toLocaleDateString(dateLocale, {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
-  const updatedDate = new Date(article.updated_at).toLocaleDateString("en-US", {
+  const updatedDate = new Date(article.updated_at).toLocaleDateString(dateLocale, {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -146,7 +155,7 @@ export function BlogArticlePage() {
           <div className="relative aspect-[21/9] rounded-xl overflow-hidden mb-8">
             <img
               src={article.cover_image_url}
-              alt={article.title}
+              alt={article.cover_image_alt || article.title}
               className="absolute inset-0 w-full h-full object-cover"
               loading="eager"
             />
@@ -156,7 +165,7 @@ export function BlogArticlePage() {
         {/* Meta */}
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <Link
-            to={`/blog/category/${article.category}`}
+            to={localePath(`/blog/category/${article.category}`, locale)}
             className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-teal-500/10 text-teal-400 border border-teal-500/20 uppercase tracking-wider hover:bg-teal-500/20 transition-colors"
           >
             <FolderOpen className="inline h-3 w-3 mr-1" />
@@ -173,7 +182,7 @@ export function BlogArticlePage() {
           {article.reading_time_minutes > 0 && (
             <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
               <Clock className="h-3 w-3" />
-              {article.reading_time_minutes} min read
+              {locale === "zh-CN" ? `${article.reading_time_minutes} 分钟阅读` : `${article.reading_time_minutes} min read`}
             </span>
           )}
         </div>
@@ -196,7 +205,7 @@ export function BlogArticlePage() {
             {article.tags.map((tag) => (
               <Link
                 key={tag}
-                to={`/blog/tag/${encodeURIComponent(tag)}`}
+                to={localePath(`/blog/tag/${encodeURIComponent(tag)}`, locale)}
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-card border border-border/30 text-muted-foreground hover:text-foreground hover:border-border/60 transition-colors"
               >
                 <Tag className="h-2.5 w-2.5" />
@@ -216,23 +225,23 @@ export function BlogArticlePage() {
           ) : article.content_markdown ? (
             <MarkdownRenderer content={article.content_markdown} />
           ) : (
-            <p className="text-muted-foreground">No content available.</p>
+            <p className="text-muted-foreground">{locale === "zh-CN" ? "暂无内容。" : "No content available."}</p>
           )}
         </div>
 
         {/* Updated notice */}
         {article.published_at !== article.updated_at && (
           <div className="mt-8 pt-4 border-t border-border/30 text-[11px] text-muted-foreground">
-            Last updated: {updatedDate}
+            {locale === "zh-CN" ? `最后更新：${updatedDate}` : `Last updated: ${updatedDate}`}
           </div>
         )}
 
         {/* Category and Tags internal links for SEO */}
         <div className="mt-8 pt-6 border-t border-border/50">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">Category:</span>
+            <span className="font-medium text-foreground">{locale === "zh-CN" ? "分类：" : "Category:"}</span>
             <Link
-              to={`/blog/category/${article.category}`}
+              to={localePath(`/blog/category/${article.category}`, locale)}
               className="text-teal-400 hover:text-teal-300 transition-colors"
             >
               {article.category.charAt(0).toUpperCase() + article.category.slice(1)}
@@ -240,11 +249,11 @@ export function BlogArticlePage() {
           </div>
           {article.tags.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-2">
-              <span className="font-medium text-foreground">Tags:</span>
+              <span className="font-medium text-foreground">{locale === "zh-CN" ? "标签：" : "Tags:"}</span>
               {article.tags.map((tag) => (
                 <Link
                   key={tag}
-                  to={`/blog/tag/${encodeURIComponent(tag)}`}
+                  to={localePath(`/blog/tag/${encodeURIComponent(tag)}`, locale)}
                   className="text-teal-400 hover:text-teal-300 transition-colors"
                 >
                   #{tag}
@@ -254,14 +263,14 @@ export function BlogArticlePage() {
           )}
         </div>
 
-        {/* Related articles placeholder - would be populated by related_article_ids from API */}
+        {/* Related articles placeholder */}
         {article.related_article_ids && article.related_article_ids.length > 0 && (
           <div className="mt-10 pt-6 border-t border-border/50">
             <h3 className="text-lg font-semibold text-foreground mb-4">
-              Related Articles
+              {locale === "zh-CN" ? "相关文章" : "Related Articles"}
             </h3>
             <p className="text-xs text-muted-foreground">
-              Related articles will appear here when configured.
+              {locale === "zh-CN" ? "相关文章配置后将在此处显示。" : "Related articles will appear here when configured."}
             </p>
           </div>
         )}

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Calendar, Clock, User } from "lucide-react";
 import type { ArticleSummary } from "@/lib/blog-types";
+import { useLocale, localePath } from "@/lib/locale";
 
 interface ArticleCardProps {
   article: ArticleSummary;
@@ -8,16 +9,19 @@ interface ArticleCardProps {
 }
 
 export function ArticleCard({ article, featured }: ArticleCardProps) {
-  const date = new Date(article.published_at).toLocaleDateString("en-US", {
+  const { locale } = useLocale();
+  const date = new Date(article.published_at).toLocaleDateString(locale === "zh-CN" ? "zh-CN" : "en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
 
+  const articleLink = localePath(`/blog/${article.slug}`, locale);
+
   if (featured) {
     return (
       <Link
-        to={`/blog/${article.slug}`}
+        to={articleLink}
         className="group block rounded-xl border border-border/50 bg-card overflow-hidden hover:border-teal-500/30 transition-all"
       >
         <div className="grid md:grid-cols-2 gap-0">
@@ -25,7 +29,7 @@ export function ArticleCard({ article, featured }: ArticleCardProps) {
             <div className="relative aspect-[16/10] md:aspect-auto md:h-full overflow-hidden">
               <img
                 src={article.cover_image_url}
-                alt={article.title}
+                alt={article.cover_image_alt || article.title}
                 className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 loading="eager"
               />
@@ -68,14 +72,14 @@ export function ArticleCard({ article, featured }: ArticleCardProps) {
 
   return (
     <Link
-      to={`/blog/${article.slug}`}
+      to={articleLink}
       className="group block rounded-xl border border-border/50 bg-card overflow-hidden hover:border-teal-500/30 transition-all flex flex-col"
     >
       {article.cover_image_url && (
         <div className="relative aspect-[16/10] overflow-hidden">
           <img
             src={article.cover_image_url}
-            alt={article.title}
+            alt={article.cover_image_alt || article.title}
             className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             loading="lazy"
           />
