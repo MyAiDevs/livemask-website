@@ -22,6 +22,7 @@ export function HomePage() {
             <Link to="/pricing" className="text-muted-foreground hover:text-foreground transition-colors">Pricing</Link>
             <Link to="/download" className="text-muted-foreground hover:text-foreground transition-colors">Download</Link>
             <Link to="/security" className="text-muted-foreground hover:text-foreground transition-colors">Security</Link>
+            <Link to="/blog" className="text-muted-foreground hover:text-foreground transition-colors">Blog</Link>
             <Link to="/faq" className="text-muted-foreground hover:text-foreground transition-colors">FAQ</Link>
             {isAuthenticated ? (
               <>
@@ -175,6 +176,7 @@ export function HomePage() {
           <div className="flex items-center gap-4">
             <a href="#" className="hover:text-foreground transition-colors">Privacy Policy</a>
             <a href="#" className="hover:text-foreground transition-colors">Terms of Service</a>
+            <Link to="/blog" className="hover:text-foreground transition-colors">Blog</Link>
             <a href="#" className="hover:text-foreground transition-colors">Contact</a>
           </div>
         </div>
@@ -374,6 +376,7 @@ function MarketingPageLayout({ children, title }: { children: React.ReactNode; t
             <Link to="/pricing" className={`transition-colors ${title === "Pricing" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>Pricing</Link>
             <Link to="/download" className={`transition-colors ${title === "Download" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>Download</Link>
             <Link to="/security" className={`transition-colors ${title === "Security" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>Security</Link>
+            <Link to="/blog" className="text-muted-foreground hover:text-foreground transition-colors">Blog</Link>
             <Link to="/faq" className={`transition-colors ${title === "FAQ" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>FAQ</Link>
           </div>
         </div>
