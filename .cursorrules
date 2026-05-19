@@ -70,6 +70,8 @@ After implementation and required validation pass:
 
 Do not report `completed` if the task branch has not been merged into `dev`, if `dev` has not been pushed to `origin/dev`, if validation only passed before the dev merge, or if merge conflicts remain unresolved.
 
+CI/CD smoke and staging validation must run from `dev` only. Do not use `task/*`, `codex/*`, or feature branch smoke as final evidence for Website completion; it is only a precheck until merged and pushed to `origin/dev`.
+
 ## Task Completion Report
 When a task or subtask is complete, use the standard completion report from:
 @../livemask-docs/ai-rules/v3.7/16-Task-Completion-Report.md
