@@ -5,6 +5,9 @@
  * No business API file should call fetch() directly.
  */
 
+// ── Shared types ────────────────────────────────────────────────────────
+
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const DEFAULT_TIMEOUT_MS = 15_000;
 
@@ -162,6 +165,30 @@ export function configureAuthProvider(
   }
 }
 
+// ── Auth lifecycle events ───────────────────────────────────────────────
+
+/**
+ * Dispatch a global event when the user session has expired.
+ * The AuthContext listens for this to clear state and redirect to login.
+ */
+function dispatchSessionExpired(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("livemask:session-expired"));
+  }
+}
+
+/**
+ * Dispatch a global event when a 403 Forbidden response is received.
+ * The UI layer can listen for this to show a toast or notification.
+ */
+function dispatchAccessDenied(message: string): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("livemask:access-denied", { detail: { message } }),
+    );
+  }
+}
+
 // ── authFetch ────────────────────────────────────────────────────────────
 
 /**
@@ -170,7 +197,8 @@ export function configureAuthProvider(
  * - Uses rawFetch
  * - Automatically adds Authorization: Bearer <access_token>
  * - On 401 AUTH_TOKEN_EXPIRED → refresh → retry once
- * - Refresh failure → throws AUTH_SESSION_EXPIRED
+ * - Refresh failure → throws AUTH_SESSION_EXPIRED, dispatches session-expired event
+ * - On 403 → dispatches access-denied event
  * - Does NOT log / leak token to console / query string
  */
 export async function authFetch<T = unknown>(
@@ -213,9 +241,51 @@ export async function authFetch<T = unknown>(
       }
 
       // Refresh failed — session expired
-      throw toHttpError(401, "AUTH_SESSION_EXPIRED", "Session expired. Please login again.");
+      dispatchSessionExpired();
+      throw toHttpError(
+        401,
+        "AUTH_SESSION_EXPIRED",
+        "Session expired. Please login again.",
+      );
+    }
+
+    // 403 — dispatch access-denied event
+    if (httpErr.isForbidden) {
+      dispatchAccessDenied(httpErr.message);
     }
 
     throw httpErr;
+  }
+}
+
+/**
+ * If there is no active session (no token available), dispatch
+ * session-expired so the AuthContext can react.
+ *
+ * Safe to call multiple times; only fires once per provider lifecycle.
+ */
+export async function ensureAuthenticated(): Promise<void> {
+  const provider = _tokenProvider;
+  const token = provider?.getAccessToken();
+  if (!token) {
+    dispatchSessionExpired();
+    throw toHttpError(
+      401,
+      "AUTH_SESSION_EXPIRED",
+      "No active session. Please login.",
+    );
+  }
+  // Attempt a lightweight check — refresh tokens proactively if needed.
+  // This is a no-op if the access token is still valid.
+  if (provider?.tryRefreshTokens) {
+    const ok = await provider.tryRefreshTokens();
+    if (!ok) {
+      dispatchSessionExpired();
+      throw toHttpError(
+        401,
+        "AUTH_SESSION_EXPIRED",
+        "Session expired. Please login again.",
+      );
+    }
   }
 }

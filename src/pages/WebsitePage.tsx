@@ -1,16 +1,18 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Shield, ArrowRight, Server, Globe, Lock, Zap, ChevronRight, Star, Download, CheckCircle, Smartphone, Monitor, Terminal } from "lucide-react";
+import { Shield, ArrowRight, Server, Globe, Lock, Zap, ChevronRight, Star, Download, CheckCircle, Smartphone, Monitor, Terminal, ExternalLink, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { AnnouncementBand } from "@/components/AnnouncementBand";
 import { CampaignBanner } from "@/components/CampaignBanner";
 import { ReleaseNotes } from "@/components/ReleaseNotes";
 import { useAnnouncements, useCampaigns, useReleaseNotes } from "@/hooks/useContent";
 import { SEO, SITE_URL } from "@/components/SEO";
-import { useLocale, LOCALE_LABELS } from "@/lib/locale";
-import { useParams } from "react-router-dom";
+import { useLocale, LOCALE_LABELS, localePath } from "@/lib/locale";
+import { useState, useEffect } from "react";
+import { releasesClient } from "@/lib/releases-api";
+import type { AppReleaseInfo, Platform } from "@/lib/releases-types";
 
 function useLocaleFromRoute() {
   const { locale: localeParam } = useParams<{ locale?: string }>();
@@ -214,6 +216,12 @@ export function PricingPage() {
 
   return (
     <MarketingPageLayout title="Pricing">
+      <SEO
+        title={locale === "zh-CN" ? "定价方案 — 透明实惠" : "Simple, Transparent Pricing"}
+        description={locale === "zh-CN" ? "选择适合您的方案，所有方案均享30天无理由退款保证。" : "Choose the plan that fits your needs. All plans include a 30-day money-back guarantee."}
+        canonical={`${SITE_URL}${lp("/pricing")}`}
+        robots="index,follow"
+      />
       <div className="pt-24 pb-20 px-4">
         <div className="max-w-4xl mx-auto text-center mb-8">
           <h1 className="text-4xl font-bold text-foreground mb-3">
@@ -300,9 +308,36 @@ export function PricingPage() {
 export function DownloadPage() {
   const { data: campaigns, isLoading: campaignsLoading } = useCampaigns();
   const { t, lp, locale } = useLocale();
+  const [releases, setReleases] = useState<AppReleaseInfo[]>([]);
+  const [releasesLoading, setReleasesLoading] = useState(true);
+
+  useEffect(() => {
+    setReleasesLoading(true);
+    releasesClient
+      .getLatestReleases(locale)
+      .then(setReleases)
+      .catch((err) => {
+        console.error("Failed to fetch latest releases:", err);
+      })
+      .finally(() => setReleasesLoading(false));
+  }, [locale]);
+
+  const platformConfig: { id: Platform; name: string; desc: string; icon: typeof Smartphone }[] = [
+    { id: "ios", name: "iOS", desc: locale === "zh-CN" ? "iPhone & iPad" : "iPhone & iPad", icon: Smartphone },
+    { id: "android", name: "Android", desc: locale === "zh-CN" ? "手机和平板" : "Phones & Tablets", icon: Smartphone },
+    { id: "macos", name: "macOS", desc: locale === "zh-CN" ? "MacBook & iMac" : "MacBooks & iMacs", icon: Monitor },
+    { id: "windows", name: "Windows", desc: "PC & Laptops", icon: Monitor },
+    { id: "linux", name: "Linux", desc: locale === "zh-CN" ? "Ubuntu, Debian, Fedora" : "Ubuntu, Debian, Fedora", icon: Terminal },
+  ];
 
   return (
     <MarketingPageLayout title="Download">
+      <SEO
+        title={locale === "zh-CN" ? "下载 LiveMask" : "Download LiveMask"}
+        description={locale === "zh-CN" ? "下载 LiveMask VPN 客户端，支持 iOS、Android、macOS、Windows、Linux 等主流平台。" : "Download LiveMask VPN client for iOS, Android, macOS, Windows, Linux, and more."}
+        canonical={`${SITE_URL}${lp("/download")}`}
+        robots="index,follow"
+      />
       <div className="pt-24 pb-20 px-4">
         <div className="max-w-3xl mx-auto text-center">
 
@@ -324,24 +359,84 @@ export function DownloadPage() {
           <p className="text-muted-foreground mb-8">
             {locale === "zh-CN" ? "支持所有主流平台。" : "Available on all major platforms."}
           </p>
-          <div className="grid md:grid-cols-3 gap-4">
-            {[
-              { name: "iOS", desc: locale === "zh-CN" ? "iPhone & iPad" : "iPhone & iPad", icon: Smartphone },
-              { name: "Android", desc: locale === "zh-CN" ? "手机和平板" : "Phones & Tablets", icon: Smartphone },
-              { name: "macOS", desc: locale === "zh-CN" ? "MacBook & iMac" : "MacBooks & iMacs", icon: Monitor },
-              { name: "Windows", desc: "PC & Laptops", icon: Monitor },
-              { name: "Linux", desc: "Ubuntu, Debian, Fedora", icon: Terminal },
-              { name: "Browser", desc: locale === "zh-CN" ? "Chrome & Firefox" : "Chrome & Firefox", icon: Globe },
-            ].map((platform, i) => (
-              <Card key={i} className="bg-card border-border hover:border-teal-500/30 cursor-pointer transition-colors">
-                <CardContent className="p-4 text-center">
-                  <platform.icon className="h-8 w-8 text-teal-500 mx-auto mb-2" />
-                  <h3 className="text-sm font-medium text-foreground">{platform.name}</h3>
-                  <p className="text-xs text-muted-foreground">{platform.desc}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+
+          {releasesLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-3 gap-4">
+              {platformConfig.map((platform) => {
+                const release = releases.find((r) =>
+                  r.artifacts.some((a) => a.platform === platform.id),
+                );
+                const artifact = release?.artifacts.find(
+                  (a) => a.platform === platform.id,
+                );
+
+                return (
+                  <Card
+                    key={platform.id}
+                    className={`bg-card border-border transition-colors ${
+                      artifact
+                        ? "hover:border-teal-500/30 cursor-pointer"
+                        : "opacity-60"
+                    }`}
+                  >
+                    {artifact ? (
+                      <a
+                        href={artifact.download_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block p-4 text-center"
+                      >
+                        <platform.icon className="h-8 w-8 text-teal-500 mx-auto mb-2" />
+                        <h3 className="text-sm font-medium text-foreground">
+                          {platform.name}
+                        </h3>
+                        <p className="text-xs text-muted-foreground mb-1">
+                          {platform.desc}
+                        </p>
+                        {release && (
+                          <span className="text-[10px] text-teal-500 font-medium">
+                            v{release.version}
+                          </span>
+                        )}
+                        {release?.release_notes && (
+                          <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
+                            {release.release_notes}
+                          </p>
+                        )}
+                      </a>
+                    ) : (
+                      <div className="p-4 text-center">
+                        <platform.icon className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                        <h3 className="text-sm font-medium text-foreground">
+                          {platform.name}
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          {locale === "zh-CN" ? "即将推出" : "Coming soon"}
+                        </p>
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Release notes link */}
+          {!releasesLoading && releases.length > 0 && (
+            <div className="mt-8">
+              <Link
+                to={lp("/blog?category=release")}
+                className="inline-flex items-center gap-1.5 text-xs text-teal-500 hover:text-teal-400 transition-colors"
+              >
+                {locale === "zh-CN" ? "查看全部更新日志" : "View all release notes"}
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </MarketingPageLayout>
@@ -353,6 +448,12 @@ export function SecurityPage() {
 
   return (
     <MarketingPageLayout title="Security">
+      <SEO
+        title={locale === "zh-CN" ? "安全与隐私 — 军事级加密保护" : "Security & Privacy — Military-Grade Encryption"}
+        description={locale === "zh-CN" ? "LiveMask 采用 AES-256 军事级加密、严格无日志政策、断网开关保护，确保您的在线隐私和安全。" : "LiveMask protects your privacy with AES-256 military-grade encryption, a strict no-logs policy, kill switch, and DNS leak protection."}
+        canonical={`${SITE_URL}${localePath("/security", locale)}`}
+        robots="index,follow"
+      />
       <div className="pt-24 pb-20 px-4">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-12">

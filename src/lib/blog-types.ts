@@ -8,6 +8,7 @@ export interface ArticleSummary {
   title: string;
   excerpt: string;
   cover_image_url: string;
+  cover_image_alt?: string;
   author_name: string;
   category: string;
   tags: string[];
@@ -30,6 +31,7 @@ export interface ArticleDetail {
   category: string;
   tags: string[];
   cover_image_url: string;
+  cover_image_alt?: string;
   seo_title: string;
   seo_description: string;
   canonical_url: string;
