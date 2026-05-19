@@ -56,4 +56,13 @@ export function useReleaseNotes() {
   return { data: notes, ...rest };
 }
 
+/** Fetch help articles */
+export function useHelpArticles() {
+  const { data, ...rest } = useContent();
+  const articles = (data ?? []).filter(
+    (item) => item.content_type === "help_article",
+  );
+  return { data: articles, ...rest };
+}
+
 export type { WebsiteContentItem };

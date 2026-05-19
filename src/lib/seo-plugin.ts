@@ -100,6 +100,13 @@ const API_BASE = process.env.VITE_API_BASE_URL || "http://localhost:8000";
 const IS_PROD_BUILD =
   process.env.NODE_ENV === "production" ||
   process.argv.some((a) => a === "build" || a === "--mode" || a.startsWith("--mode="));
+const DEV_SEO_CACHE_TTL_MS = parseInt(
+  process.env.VITE_SEO_CACHE_TTL || "30000",
+  10,
+);
+
+let devXmlCache: { expiresAt: number; value: { sitemap: string; rss: string } } | null = null;
+let devXmlPending: Promise<{ sitemap: string; rss: string }> | null = null;
 
 // ── API fetch helpers ─────────────────────────────────────────────
 
@@ -502,6 +509,26 @@ async function generateAllXml(): Promise<{ sitemap: string; rss: string }> {
   return { sitemap: sitemapXml, rss: rssXml };
 }
 
+async function generateAllXmlCached(): Promise<{ sitemap: string; rss: string }> {
+  const now = Date.now();
+  if (devXmlCache && devXmlCache.expiresAt > now) {
+    return devXmlCache.value;
+  }
+  if (devXmlPending) {
+    return devXmlPending;
+  }
+
+  devXmlPending = generateAllXml()
+    .then((value) => {
+      devXmlCache = { value, expiresAt: Date.now() + DEV_SEO_CACHE_TTL_MS };
+      return value;
+    })
+    .finally(() => {
+      devXmlPending = null;
+    });
+  return devXmlPending;
+}
+
 // ── Vite plugin ───────────────────────────────────────────────────
 
 export function seoPlugin(): Plugin {
@@ -514,12 +541,12 @@ export function seoPlugin(): Plugin {
     },
     configureServer(server) {
       server.middlewares.use("/sitemap.xml", async (_req, res) => {
-        const { sitemap } = await generateAllXml();
+        const { sitemap } = await generateAllXmlCached();
         res.setHeader("Content-Type", "application/xml");
         res.end(sitemap);
       });
       server.middlewares.use("/rss.xml", async (_req, res) => {
-        const { rss } = await generateAllXml();
+        const { rss } = await generateAllXmlCached();
         res.setHeader("Content-Type", "application/rss+xml");
         res.end(rss);
       });

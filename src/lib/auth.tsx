@@ -42,6 +42,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Listen for session-expired events dispatched by authFetch (401 after refresh failure)
+  useEffect(() => {
+    function handleSessionExpired() {
+      authClient.clearTokens();
+      setState({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        error: "Session expired. Please login again.",
+      });
+    }
+
+    window.addEventListener("livemask:session-expired", handleSessionExpired);
+    return () =>
+      window.removeEventListener("livemask:session-expired", handleSessionExpired);
+  }, []);
+
   const login = useCallback(async (data: LoginRequest) => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {

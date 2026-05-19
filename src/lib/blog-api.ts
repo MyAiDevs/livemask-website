@@ -4,17 +4,32 @@ import type {
   ArticleListResponse,
   CategoriesResponse,
   TagsResponse,
+  SitemapResponse,
+  RssResponse,
   BlogQueryParams,
 } from "./blog-types";
 import { publicFetch } from "./http-client";
 
-const MOCK_MODE =
+const IS_MOCK =
   import.meta.env.VITE_API_MOCK_MODE !== "false" && import.meta.env.VITE_API_MOCK_MODE !== "0";
-
 const isDev = import.meta.env.DEV;
+const isProd = import.meta.env.PROD;
+
+/**
+ * Production mock guard – throws in production if mock mode is active.
+ * Prevents silent mock data from reaching crawlers in production builds.
+ */
+function assertNotProdMock(): void {
+  if (isProd && IS_MOCK) {
+    throw new Error(
+      "BLOCKED: mock mode is not allowed in production. " +
+        "Set VITE_API_MOCK_MODE=false in .env.production."
+    );
+  }
+}
 
 class BlogApiClient {
-  private mockMode = MOCK_MODE;
+  private mockMode = IS_MOCK;
 
   isMockMode(): boolean {
     return this.mockMode;
@@ -22,6 +37,7 @@ class BlogApiClient {
 
   private async request<T>(path: string): Promise<T> {
     if (this.mockMode) {
+      assertNotProdMock();
       return this.mockRequest<T>(path);
     }
     return publicFetch<T>(path, {
@@ -57,13 +73,50 @@ class BlogApiClient {
     return this.request<TagsResponse>("/api/v1/content/blog/tags");
   }
 
+  async getSitemap(): Promise<SitemapResponse> {
+    return this.request<SitemapResponse>("/api/v1/content/sitemap");
+  }
+
+  async getRss(): Promise<RssResponse> {
+    return this.request<RssResponse>("/api/v1/content/rss");
+  }
+
   // ── Mock Data ────────────────────────────────────────────────────────
 
   private async mockRequest<T>(path: string): Promise<T> {
     await new Promise((r) => setTimeout(r, 400));
 
-    // Article list
-    if (path.startsWith("/api/v1/content/blog") && !path.includes("/categories") && !path.includes("/tags")) {
+    // Exact-match routes (categories, tags, sitemap, rss) first
+    // to avoid the generic article detail handler catching them.
+    if (path === "/api/v1/content/blog/categories") {
+      return {
+        categories: [
+          { name: "Privacy", slug: "privacy", article_count: 4 },
+          { name: "Security", slug: "security", article_count: 3 },
+          { name: "Technology", slug: "technology", article_count: 3 },
+          { name: "Guides", slug: "guides", article_count: 2 },
+        ],
+      } as T;
+    }
+
+    if (path === "/api/v1/content/blog/tags") {
+      return {
+        tags: [
+          { name: "Encryption", slug: "Encryption", article_count: 3 },
+          { name: "VPN", slug: "VPN", article_count: 5 },
+          { name: "Privacy", slug: "Privacy", article_count: 4 },
+          { name: "Security", slug: "Security", article_count: 4 },
+          { name: "Streaming", slug: "Streaming", article_count: 2 },
+          { name: "Tutorial", slug: "Tutorial", article_count: 3 },
+          { name: "WireGuard", slug: "WireGuard", article_count: 1 },
+          { name: "OpenVPN", slug: "OpenVPN", article_count: 1 },
+        ],
+      } as T;
+    }
+
+    // Article list — exact path match (no slug after /blog)
+    const pathOnly = path.split("?")[0];
+    if (pathOnly === "/api/v1/content/blog") {
       const url = new URL(path, "http://mock");
       const params = url.searchParams;
       const category = params.get("category");
@@ -106,35 +159,59 @@ class BlogApiClient {
       return { article } as T;
     }
 
-    // Categories
-    if (path === "/api/v1/content/blog/categories") {
-      return {
-        categories: [
-          { name: "Privacy", slug: "privacy", article_count: 4 },
-          { name: "Security", slug: "security", article_count: 3 },
-          { name: "Technology", slug: "technology", article_count: 3 },
-          { name: "Guides", slug: "guides", article_count: 2 },
-        ],
-      } as T;
+    // Sitemap
+    if (path === "/api/v1/content/sitemap") {
+      return this.mockSitemapResponse() as unknown as T;
     }
 
-    // Tags
-    if (path === "/api/v1/content/blog/tags") {
-      return {
-        tags: [
-          { name: "Encryption", slug: "Encryption", article_count: 3 },
-          { name: "VPN", slug: "VPN", article_count: 5 },
-          { name: "Privacy", slug: "Privacy", article_count: 4 },
-          { name: "Security", slug: "Security", article_count: 4 },
-          { name: "Streaming", slug: "Streaming", article_count: 2 },
-          { name: "Tutorial", slug: "Tutorial", article_count: 3 },
-          { name: "WireGuard", slug: "WireGuard", article_count: 1 },
-          { name: "OpenVPN", slug: "OpenVPN", article_count: 1 },
-        ],
-      } as T;
+    // RSS
+    if (path === "/api/v1/content/rss") {
+      return this.mockRssResponse() as unknown as T;
     }
 
     throw { status: 404, message: "Endpoint not found in mock" };
+  }
+
+  private mockSitemapResponse(): SitemapResponse {
+    const articles = this.mockArticles();
+    const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+    return {
+      urls: [
+        { loc: "https://livemask.com/", lastmod: now, changefreq: "monthly", priority: 1.0 },
+        { loc: "https://livemask.com/pricing", lastmod: now, changefreq: "monthly", priority: 0.8 },
+        { loc: "https://livemask.com/download", lastmod: now, changefreq: "monthly", priority: 0.7 },
+        { loc: "https://livemask.com/security", lastmod: now, changefreq: "monthly", priority: 0.6 },
+        { loc: "https://livemask.com/faq", lastmod: now, changefreq: "monthly", priority: 0.5 },
+        { loc: "https://livemask.com/blog", lastmod: articles[0]?.updated_at || now, changefreq: "daily", priority: 0.9 },
+        ...articles.map((a) => ({
+          loc: `https://livemask.com/blog/${a.slug}`,
+          lastmod: a.updated_at,
+          changefreq: "weekly" as const,
+          priority: 0.8,
+        })),
+      ],
+    };
+  }
+
+  private mockRssResponse(): RssResponse {
+    return {
+      feed: {
+        title: "LiveMask Blog",
+        description: "Latest articles about VPN technology, online privacy, and security tips from LiveMask.",
+        link: "https://livemask.com/rss.xml",
+        language: "en-us",
+        items: this.mockArticles().map((a) => ({
+          title: a.title,
+          link: `https://livemask.com/blog/${a.slug}`,
+          description: a.excerpt,
+          content_html: "",
+          author: a.author_name,
+          category: [a.category],
+          pub_date: new Date(a.published_at).toUTCString(),
+          guid: `https://livemask.com/blog/${a.slug}`,
+        })),
+      },
+    };
   }
 
   private mockArticles(): ArticleSummary[] {
