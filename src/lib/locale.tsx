@@ -54,6 +54,7 @@ export const NAV_LABELS: Record<string, Record<Locale, string>> = {
   contact:           { "zh-CN": "联系我们",    "en-US": "Contact" },
   "previous":        { "zh-CN": "上一页",      "en-US": "Previous" },
   next:              { "zh-CN": "下一页",       "en-US": "Next" },
+  "referral-hint":   { "zh-CN": "你正在通过邀请链接注册", "en-US": "You are registering through an invitation link" },
 };
 
 // ── SEO labels (crawler-visible) ─────────────────────────────────────────

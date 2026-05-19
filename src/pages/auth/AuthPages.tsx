@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Shield, Mail, Lock, AlertCircle, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useLocale } from "@/lib/locale";
 
 export function LoginPage() {
   const [email, setEmail] = useState("");
@@ -112,6 +113,22 @@ export function RegisterPage() {
   const [localError, setLocalError] = useState("");
   const [success, setSuccess] = useState(false);
   const { register, isLoading, error, clearError } = useAuth();
+  const { t, locale } = useLocale();
+  const [searchParams] = useSearchParams();
+  const refCode = searchParams.get("ref");
+
+  // Sanitize: alphanumeric uppercase only, no open redirect
+  const sanitizedRef =
+    refCode && refCode.trim()
+      ? refCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
+      : "";
+
+  // Auto-populate invite code from ?ref= query param on mount
+  const [initialized, setInitialized] = useState(false);
+  if (!initialized && sanitizedRef && !inviteCode) {
+    setInviteCode(sanitizedRef);
+    setInitialized(true);
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -154,7 +171,9 @@ export function RegisterPage() {
       <AuthLayout>
         <Card className="w-full max-w-sm bg-card border-border">
           <CardHeader className="text-center pb-4">
-            <CardTitle className="text-foreground text-lg">Check Your Email</CardTitle>
+            <CardTitle className="text-foreground text-lg">
+              {locale === "zh-CN" ? "检查您的邮箱" : "Check Your Email"}
+            </CardTitle>
           </CardHeader>
           <CardContent className="text-center space-y-4">
             <div className="flex justify-center">
@@ -162,13 +181,18 @@ export function RegisterPage() {
                 <Shield className="h-6 w-6 text-emerald-500" />
               </div>
             </div>
-            <p className="text-sm text-foreground">Account created successfully!</p>
+            <p className="text-sm text-foreground">
+              {locale === "zh-CN" ? "账户创建成功！" : "Account created successfully!"}
+            </p>
             <p className="text-xs text-muted-foreground">
-              We sent a verification link to <strong className="text-foreground">{email}</strong>.
-              Please check your email and verify your account to continue.
+              {locale === "zh-CN"
+                ? `我们已发送验证链接到 ${email}。请检查您的邮箱并验证账户。`
+                : `We sent a verification link to ${email}. Please check your email and verify your account to continue.`}
             </p>
             <Link to="/login">
-              <Button className="bg-teal-600 hover:bg-teal-700 text-white w-full">Continue to Login</Button>
+              <Button className="bg-teal-600 hover:bg-teal-700 text-white w-full">
+                {locale === "zh-CN" ? "前往登录" : "Continue to Login"}
+              </Button>
             </Link>
           </CardContent>
         </Card>
@@ -185,18 +209,31 @@ export function RegisterPage() {
               <Shield className="h-6 w-6 text-teal-500" />
             </div>
           </div>
-          <CardTitle className="text-foreground text-lg">Create Account</CardTitle>
-          <p className="text-xs text-muted-foreground mt-1">Get started with LiveMask Secure VPN</p>
+          <CardTitle className="text-foreground text-lg">
+            {locale === "zh-CN" ? "创建账户" : "Create Account"}
+          </CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            {locale === "zh-CN" ? "开始使用 LiveMask 安全 VPN" : "Get started with LiveMask Secure VPN"}
+          </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Referral hint banner */}
+            {sanitizedRef && (
+              <div className="flex items-center gap-2 rounded border border-teal-500/20 bg-teal-500/5 px-3 py-2 text-xs text-teal-400">
+                <Shield className="h-3.5 w-3.5 shrink-0" />
+                {t("referral-hint")}
+              </div>
+            )}
             {(localError || error) && (
               <div className="flex items-center gap-2 rounded border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-400">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />{localError || error}
               </div>
             )}
             <div className="space-y-1.5">
-              <Label htmlFor="reg-email" className="text-xs text-muted-foreground">Email</Label>
+              <Label htmlFor="reg-email" className="text-xs text-muted-foreground">
+                {locale === "zh-CN" ? "邮箱" : "Email"}
+              </Label>
               <Input
                 id="reg-email"
                 type="email"
@@ -209,11 +246,13 @@ export function RegisterPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="reg-password" className="text-xs text-muted-foreground">Password</Label>
+              <Label htmlFor="reg-password" className="text-xs text-muted-foreground">
+                {locale === "zh-CN" ? "密码" : "Password"}
+              </Label>
               <Input
                 id="reg-password"
                 type="password"
-                placeholder="Min 8 characters"
+                placeholder={locale === "zh-CN" ? "至少8个字符" : "Min 8 characters"}
                 className="bg-background border-border"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -222,11 +261,13 @@ export function RegisterPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="reg-confirm" className="text-xs text-muted-foreground">Confirm Password</Label>
+              <Label htmlFor="reg-confirm" className="text-xs text-muted-foreground">
+                {locale === "zh-CN" ? "确认密码" : "Confirm Password"}
+              </Label>
               <Input
                 id="reg-confirm"
                 type="password"
-                placeholder="Repeat password"
+                placeholder={locale === "zh-CN" ? "重复密码" : "Repeat password"}
                 className="bg-background border-border"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -235,7 +276,9 @@ export function RegisterPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="reg-invite" className="text-xs text-muted-foreground">Invite / Referral Code (optional)</Label>
+              <Label htmlFor="reg-invite" className="text-xs text-muted-foreground">
+                {locale === "zh-CN" ? "邀请码（选填）" : "Invite / Referral Code (optional)"}
+              </Label>
               <Input
                 id="reg-invite"
                 type="text"
@@ -248,18 +291,24 @@ export function RegisterPage() {
             <div className="flex items-start gap-2">
               <Checkbox id="terms" checked={agreed} onCheckedChange={(v) => setAgreed(v === true)} className="mt-0.5" />
               <label htmlFor="terms" className="text-xs text-muted-foreground cursor-pointer">
-                I agree to the <a href="#" className="text-teal-400">Terms of Service</a> and{" "}
-                <a href="#" className="text-teal-400">Privacy Policy</a>
+                {locale === "zh-CN" ? (
+                  <>我同意 <a href="#" className="text-teal-400">服务条款</a> 和 <a href="#" className="text-teal-400">隐私政策</a></>
+                ) : (
+                  <>I agree to the <a href="#" className="text-teal-400">Terms of Service</a> and{" "}
+                  <a href="#" className="text-teal-400">Privacy Policy</a></>
+                )}
               </label>
             </div>
             <Button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white" disabled={isLoading}>
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Create Account
+              {locale === "zh-CN" ? "创建账户" : "Create Account"}
             </Button>
           </form>
           <div className="mt-4 text-center text-xs text-muted-foreground">
-            Already have an account?{" "}
-            <Link to="/login" className="text-teal-400 hover:text-teal-300">Sign In</Link>
+            {locale === "zh-CN" ? "已有账户？" : "Already have an account? "}
+            <Link to="/login" className="text-teal-400 hover:text-teal-300">
+              {locale === "zh-CN" ? "登录" : "Sign In"}
+            </Link>
           </div>
         </CardContent>
       </Card>
